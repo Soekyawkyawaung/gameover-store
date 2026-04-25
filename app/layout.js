@@ -12,7 +12,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "Nyi Nyi Game Store",
+  title: "GameOver Game Store",
   description: "Best game store in Myanmar",
   // This prevents users from accidentally zooming and breaking the layout
   viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0",

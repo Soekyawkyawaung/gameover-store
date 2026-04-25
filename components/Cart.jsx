@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Trash2, Loader2, CreditCard } from 'lucide-react';
+import { ArrowLeft, Trash2, ShoppingCart, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
 const Cart = ({ onBack, onCheckout }) => {
   const [cartItems, setCartItems] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [totalPrice, setTotalPrice] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchCart();
@@ -16,98 +16,193 @@ const Cart = ({ onBack, onCheckout }) => {
 
   const fetchCart = async () => {
     setIsLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data, error } = await supabase
+          .from('cart')
+          .select('id, account_type, selected_option, quantity, games(*), gift_cards(*)')
+          .eq('user_id', session.user.id)
+          .order('id', { ascending: true }); // Keeps items from jumping around when updated
+
+        if (error) throw error;
+
+        if (data) {
+          setCartItems(data);
+          calculateTotal(data);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching cart:", error);
+    } finally {
       setIsLoading(false);
-      return;
     }
-
-    // Fetch cart joined with game details
-    const { data, error } = await supabase
-      .from('cart')
-      .select('id, game_id, games(*)')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false });
-
-    if (!error && data) {
-      setCartItems(data);
-      calculateTotal(data);
-    }
-    setIsLoading(false);
   };
 
   const calculateTotal = (items) => {
     const total = items.reduce((sum, item) => {
-      const price = item.games.discount_price || item.games.price;
-      return sum + Number(price);
+      const isGift = !!item.gift_cards;
+      let priceToUse = 0;
+      
+      if (isGift && item.selected_option) {
+        priceToUse = Number(item.selected_option.price);
+      } else if (item.games) {
+        priceToUse = item.account_type === 'Deactivated Account' 
+          ? (item.games.deactivated_discount || item.games.deactivated_price)
+          : (item.games.discount_price || item.games.price);
+      }
+      
+      return sum + (Number(priceToUse) * (item.quantity || 1));
     }, 0);
+    
     setTotalPrice(total);
   };
 
-  const handleRemove = async (cartId) => {
-    const { error } = await supabase.from('cart').delete().eq('id', cartId);
-    if (error) {
-      toast.error("Could not remove item.");
-    } else {
-      toast.success("Removed from cart");
-      const newCart = cartItems.filter(item => item.id !== cartId);
-      setCartItems(newCart);
-      calculateTotal(newCart);
-      window.dispatchEvent(new Event('cartUpdated')); // Update header cart number
+  const handleRemoveItem = async (id) => {
+    try {
+      const { error } = await supabase.from('cart').delete().eq('id', id);
+      if (error) throw error;
+      
+      const updatedCart = cartItems.filter(item => item.id !== id);
+      setCartItems(updatedCart);
+      calculateTotal(updatedCart);
+      toast.success("Item removed");
+      window.dispatchEvent(new Event('cartUpdated')); 
+    } catch (error) {
+      toast.error("Failed to remove item");
     }
   };
 
+  // --- NEW: Handle Quantity Changes ---
+  const handleUpdateQuantity = async (id, currentQty, change) => {
+    const newQty = currentQty + change;
+    if (newQty < 1) return; // Prevent going below 1 (use trash to delete)
+
+    // Update UI instantly (Optimistic Update)
+    const updatedCart = cartItems.map(item => 
+      item.id === id ? { ...item, quantity: newQty } : item
+    );
+    setCartItems(updatedCart);
+    calculateTotal(updatedCart);
+
+    // Update Database in background
+    try {
+      const { error } = await supabase.from('cart').update({ quantity: newQty }).eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      toast.error("Failed to update quantity");
+      fetchCart(); // Revert to database state if it fails
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen flex-col bg-gray-50">
+        <div className="sticky top-0 z-50 flex items-center bg-white px-4 py-4 shadow-sm">
+          <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-gray-100"><ArrowLeft className="h-6 w-6 text-gray-800" /></button>
+          <h1 className="ml-2 text-lg font-black text-gray-900">Your Cart</h1>
+        </div>
+        <div className="flex flex-1 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-black" /></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50 pb-28 animate-in slide-in-from-right duration-300">
-      <div className="sticky top-0 z-50 flex items-center bg-white px-4 py-4 shadow-sm">
-        <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-all">
+    <div className="flex flex-col min-h-screen bg-gray-50 animate-in slide-in-from-right duration-300">
+      
+      {/* Header */}
+      <div className="sticky top-0 z-50 flex items-center bg-white px-4 py-4 shadow-sm border-b border-gray-100">
+        <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all">
           <ArrowLeft className="h-6 w-6 text-gray-800" />
         </button>
-        <h1 className="ml-2 text-xl font-black text-gray-900">Shopping Cart</h1>
+        <h1 className="ml-2 text-lg font-black text-gray-900">Your Cart</h1>
       </div>
 
-      <div className="p-4">
-        {isLoading ? (
-          <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-red-600" /></div>
-        ) : cartItems.length === 0 ? (
-          <div className="text-center py-20">
-            <h2 className="text-lg font-bold text-gray-900">Your cart is empty</h2>
-            <p className="text-sm text-gray-500 mt-2">Looks like you haven't added any games yet.</p>
-            <button onClick={onBack} className="mt-6 rounded-xl bg-[#e31818] px-6 py-3 font-bold text-white">Start Shopping</button>
-          </div>
-        ) : (
+      {cartItems.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
+          <div className="rounded-full bg-gray-200 p-6 mb-4"><ShoppingCart className="h-10 w-10 text-gray-400" /></div>
+          <h2 className="text-xl font-black text-gray-900 mb-2">Your cart is empty</h2>
+          <p className="text-sm font-semibold text-gray-500 mb-8">Looks like you haven't added any games or gift cards yet.</p>
+          <button onClick={onBack} className="rounded-xl bg-black px-8 py-3.5 font-bold text-white shadow-lg active:scale-95 transition-all">
+            Continue Shopping
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col p-4 pb-32">
           <div className="flex flex-col gap-4">
-            {cartItems.map((item) => (
-              <div key={item.id} className="flex overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm p-3 gap-3">
-                <div className="w-24 h-24 flex-shrink-0 bg-gray-100 rounded-lg overflow-hidden">
-                  <img src={item.games.cover_image} alt={item.games.name} className="h-full w-full object-cover" />
-                </div>
-                <div className="flex flex-1 flex-col justify-between">
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-900 leading-tight">{item.games.name}</h3>
-                    <p className="mt-1 text-sm font-extrabold text-[#e31818]">{item.games.discount_price || item.games.price} MMK</p>
-                  </div>
-                  <div className="flex justify-end">
-                    <button onClick={() => handleRemove(item.id)} className="text-xs font-bold text-gray-500 hover:text-red-600 flex items-center gap-1">
-                      <Trash2 className="h-4 w-4" /> Remove
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+            {cartItems.map(item => {
+              const isGift = !!item.gift_cards;
+              const targetItem = isGift ? item.gift_cards : item.games;
+              const itemQty = item.quantity || 1;
+              
+              if (!targetItem) return null; 
 
-      {/* BOTTOM CHECKOUT BAR */}
-      {cartItems.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 mx-auto max-w-md bg-white border-t border-gray-200 p-4 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-50">
-          <div className="flex justify-between items-end mb-4">
-            <span className="text-sm font-bold text-gray-500">Total Total</span>
-            <span className="text-2xl font-black text-[#e31818]">{totalPrice.toLocaleString()} MMK</span>
+              let priceToUse = 0;
+              if (isGift) {
+                priceToUse = item.selected_option?.price || 0;
+              } else {
+                priceToUse = item.account_type === 'Deactivated Account' 
+                  ? (targetItem.deactivated_discount || targetItem.deactivated_price) 
+                  : (targetItem.discount_price || targetItem.price);
+              }
+
+              return (
+                <div key={item.id} className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+                  <div className="w-28 bg-gray-100 flex items-center justify-center p-2">
+                    <img src={targetItem.cover_image || targetItem.image} alt={targetItem.name} className={`h-full w-full ${isGift ? 'object-contain' : 'object-cover rounded-lg'}`} />
+                  </div>
+                  
+                  <div className="flex flex-1 flex-col justify-between p-4">
+                    <div className="flex justify-between items-start">
+                      <div className="pr-2">
+                        <h3 className="text-sm font-bold text-gray-900 leading-tight">{targetItem.name}</h3>
+                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1 mb-2">
+                          {isGift ? item.selected_option?.label : item.account_type}
+                        </p>
+                        
+                        {/* --- NEW: Interactive Quantity Selector --- */}
+                        <div className="flex items-center gap-3 bg-gray-50 rounded-full px-2 py-1 border border-gray-200 w-fit">
+                          <button 
+                            onClick={() => handleUpdateQuantity(item.id, itemQty, -1)}
+                            disabled={itemQty <= 1}
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-white text-gray-600 shadow-sm border border-gray-200 font-bold disabled:opacity-30 active:scale-95 transition-all"
+                          >-</button>
+                          <span className="text-xs font-black w-4 text-center text-gray-900">{itemQty}</span>
+                          <button 
+                            onClick={() => handleUpdateQuantity(item.id, itemQty, 1)}
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-black text-white shadow-sm font-bold active:scale-95 transition-all"
+                          >+</button>
+                        </div>
+                      </div>
+
+                      <button onClick={() => handleRemoveItem(item.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    </div>
+                    
+                    <div className="mt-3 font-black text-black">
+                      {(Number(priceToUse) * itemQty).toLocaleString()} MMK
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <button onClick={onCheckout} className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#e31818] py-4 font-bold text-white shadow-lg shadow-red-500/30 hover:bg-red-700 active:scale-95 transition-all">
-            <CreditCard className="h-5 w-5" /> Proceed to Checkout
+        </div>
+      )}
+
+      {/* Bottom Checkout Bar */}
+      {cartItems.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto border-t border-gray-100 bg-white p-4 z-40">
+          <div className="mb-4 flex justify-between items-center px-1">
+            <span className="text-sm font-bold text-gray-500">Subtotal</span>
+            <span className="text-xl font-black text-black">{totalPrice.toLocaleString()} MMK</span>
+          </div>
+          <button 
+            onClick={onCheckout} 
+            className="w-full rounded-xl bg-black py-4 font-black text-white shadow-lg shadow-gray-500/30 active:scale-95 transition-transform hover:bg-gray-800"
+          >
+            PROCEED TO CHECKOUT
           </button>
         </div>
       )}

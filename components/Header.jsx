@@ -1,138 +1,276 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Menu, ShoppingCart, ShieldAlert } from 'lucide-react'; 
+import React, { useState, useEffect } from 'react';
+import { ShoppingCart, User, Menu, Heart, Package, ShieldCheck, X, LogIn, LogOut, FileText, Phone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import toast from 'react-hot-toast';
 
-const Header = ({ onSignInClick, onProfileClick, onAdminClick, onCartClick, onWishlistClick, onOrdersClick }) => { 
+const Header = ({ onSignInClick, onProfileClick, onAdminClick, onCartClick, onWishlistClick, onOrdersClick }) => {
   const [user, setUser] = useState(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false); 
-  const [cartCount, setCartCount] = useState(0); 
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
-  const fetchCartCount = useCallback(async (userId) => {
-    if (!userId) return;
-    const { count, error } = await supabase
-      .from('cart')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId);
-    
-    if (!error) setCartCount(count || 0);
-  }, []);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showHotline, setShowHotline] = useState(false);
+  
+  // --- NEW: Cart Count State ---
+  const [cartCount, setCartCount] = useState(0);
 
-  useEffect(() => {
-    const initSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user || null);
-      if (session?.user) fetchCartCount(session.user.id);
-    };
-    initSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-      if (session?.user) {
-        fetchCartCount(session.user.id);
-      } else {
-        setCartCount(0);
+  // Automatically fetch the cart total from the database
+  const fetchCartCount = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      const { data } = await supabase.from('cart').select('quantity').eq('user_id', session.user.id);
+      if (data) {
+        // Calculate the total quantity across all items
+        const totalItems = data.reduce((sum, item) => sum + (item.quantity || 1), 0);
+        setCartCount(totalItems);
       }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [fetchCartCount]);
-
-  useEffect(() => {
-    const handleCartUpdate = () => {
-      if (user) fetchCartCount(user.id);
-    };
-    window.addEventListener('cartUpdated', handleCartUpdate);
-    return () => window.removeEventListener('cartUpdated', handleCartUpdate);
-  }, [user, fetchCartCount]);
-
-  const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (!error) {
-      toast.success("Logged out successfully.");
-      setIsMenuOpen(false); 
+    } else {
+      setCartCount(0);
     }
   };
 
-  return (
-    <header className="sticky top-0 z-[100] flex items-center justify-between bg-white px-4 py-3 shadow-sm border-b border-gray-100">
-      
-      <div className="flex items-center">
-        <Menu className="h-6 w-6 text-gray-800 cursor-pointer active:scale-90 transition-transform" />
-      </div>
-      
-      <div className="flex flex-1 items-center justify-center pl-4">
-        <img src="/logo.jpg" alt="Nyi Nyi Game Store" className="h-10 w-auto object-contain" />
-      </div>
+  useEffect(() => {
+    // Initial fetch
+    fetchCartCount();
+    
+    // Listen for changes when user adds/removes items on other pages
+    window.addEventListener('cartUpdated', fetchCartCount);
 
-      <div className="flex items-center gap-4">
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
+        setIsAdmin(session.user.email === 'pyaephyo.gameover@gmail.com');
+      }
+    };
+    checkUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        setIsAdmin(session.user.email === 'pyaephyo.gameover@gmail.com');
+        fetchCartCount(); // Refetch if they log in
+      } else {
+        setUser(null);
+        setIsAdmin(false);
+        setShowProfileDropdown(false);
+        setCartCount(0); // Clear bubble if they log out
+      }
+    });
+
+    return () => {
+      window.removeEventListener('cartUpdated', fetchCartCount);
+      if (authListener?.subscription) authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setShowProfileDropdown(false);
+    window.location.reload(); 
+  };
+
+  return (
+    <>
+      <header className="sticky top-0 z-40 bg-white shadow-sm border-b border-gray-100 px-4 py-3 flex items-center justify-between">
         
-        <div className="relative cursor-pointer active:scale-90 transition-transform" onClick={onCartClick}>
-          <ShoppingCart className="h-6 w-6 text-gray-800" />
-          {cartCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-[#e31818] text-[9px] font-bold text-white shadow-sm">
-              {cartCount}
-            </span>
-          )}
+        <button onClick={() => setIsMenuOpen(true)} className="p-2 -ml-2 text-gray-600 hover:text-black rounded-full transition-colors">
+          <Menu className="h-6 w-6" />
+        </button>
+
+        <div className="flex items-center gap-2 cursor-pointer absolute left-1/2 -translate-x-1/2">
+          <div className="h-8 w-8 overflow-hidden rounded-full border border-gray-200 bg-black flex items-center justify-center">
+            <img src="/logo.jpg" alt="GameOver Logo" className="h-full w-full object-cover" />
+          </div>
+          <h1 className="text-xl font-black tracking-tighter text-gray-900 hidden sm:block">
+            GAME<span className="text-gray-400">OVER</span>
+          </h1>
         </div>
 
-        {user ? (
-          <div className="relative flex items-center">
-            
-            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-50 border border-gray-200 hover:bg-gray-100 overflow-hidden transition-all active:scale-95">
-              {user?.user_metadata?.avatar_url ? (
-                <img src={user.user_metadata.avatar_url} alt="Profile" className="h-full w-full object-cover" />
-              ) : (
-                <img src="/profile.png" alt="Default Profile" className="h-5 w-5 object-contain opacity-70" />
-              )}
+        <div className="flex items-center gap-2">
+          
+          {/* --- NEW: Shopping Cart with Notification Bubble --- */}
+          <button onClick={onCartClick} className="relative p-2 text-gray-600 hover:text-black rounded-full transition-colors">
+            <ShoppingCart className="h-6 w-6" />
+            {cartCount > 0 && (
+              <span className="absolute top-0 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white border-2 border-white animate-in zoom-in">
+                {cartCount > 99 ? '99+' : cartCount}
+              </span>
+            )}
+          </button>
+          
+          <div className="relative">
+            <button 
+              onClick={() => user ? setShowProfileDropdown(!showProfileDropdown) : onSignInClick()} 
+              className={`p-2 -mr-2 rounded-full transition-colors ${showProfileDropdown ? 'bg-gray-100 text-black' : 'text-gray-600 hover:text-black'}`}
+            >
+              <User className="h-6 w-6" />
             </button>
 
-            {isMenuOpen && (
+            {showProfileDropdown && user && (
               <>
-                <div className="fixed inset-0 z-10" onClick={() => setIsMenuOpen(false)}></div>
-                
-                <div className="absolute right-0 top-full mt-3 w-52 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl z-20 animate-in fade-in zoom-in duration-200 origin-top-right">
-                  
-                  <button onClick={() => { setIsMenuOpen(false); onProfileClick(); }} className="flex w-full items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors">
-                    <img src="/profile.png" alt="Icon" className="h-5 w-5 object-contain" />
-                    <span className="text-sm font-bold text-gray-700">My Profile</span>
-                  </button>
-                  
-                  <button onClick={() => { setIsMenuOpen(false); onOrdersClick(); }} className="flex w-full items-center gap-3 border-t border-gray-50 px-4 py-3.5 hover:bg-gray-50 transition-colors">
-                    <img src="/orders.png" alt="Icon" className="h-5 w-5 object-contain" />
-                    <span className="text-sm font-bold text-gray-700">My Orders</span>
-                  </button>
-
-                  <button onClick={() => { setIsMenuOpen(false); onWishlistClick(); }} className="flex w-full items-center gap-3 border-t border-gray-50 px-4 py-3.5 hover:bg-gray-50 transition-colors">
-                    <img src="/wishlist.png" alt="Icon" className="h-5 w-5 object-contain" />
-                    <span className="text-sm font-bold text-gray-700">My Wishlist</span>
-                  </button>
-
-                  {user.email === 'kyone94@gmail.com' && (
-                    <button onClick={() => { setIsMenuOpen(false); onAdminClick(); }} className="flex w-full items-center gap-3 border-t border-gray-50 bg-black px-4 py-3.5 hover:bg-gray-900 transition-colors">
-                      <ShieldAlert className="h-5 w-5 text-white" />
-                      <span className="text-sm font-bold text-white">Admin Panel</span>
+                <div className="fixed inset-0 z-40" onClick={() => setShowProfileDropdown(false)}></div>
+                <div className="absolute right-0 top-full mt-4 w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <p className="text-sm font-bold text-gray-900 truncate">{user.user_metadata?.full_name || 'Customer'}</p>
+                    <p className="text-xs font-semibold text-gray-500 truncate mt-0.5">{user.email}</p>
+                  </div>
+                  <div className="py-2">
+                    {isAdmin && (
+                      <button onClick={() => { setShowProfileDropdown(false); onAdminClick(); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 hover:text-black transition-colors">
+                        <ShieldCheck className="h-4 w-4" /> Admin Panel
+                      </button>
+                    )}
+                    <button onClick={() => { setShowProfileDropdown(false); onProfileClick(); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 hover:text-black transition-colors">
+                      <User className="h-4 w-4" /> Profile Settings
                     </button>
-                  )}
-                  
-                  <button onClick={handleLogout} className="flex w-full items-center gap-3 border-t border-gray-50 px-4 py-3.5 bg-red-50/30 hover:bg-red-50 transition-colors">
-                    <img src="/log-out.png" alt="Icon" className="h-5 w-5 object-contain" />
-                    <span className="text-sm font-bold text-red-600">Log Out</span>
-                  </button>
-
+                    <button onClick={() => { setShowProfileDropdown(false); onOrdersClick(); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 hover:text-black transition-colors">
+                      <Package className="h-4 w-4" /> My Orders
+                    </button>
+                    <button onClick={() => { setShowProfileDropdown(false); onWishlistClick(); }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 hover:text-black transition-colors">
+                      <Heart className="h-4 w-4" /> Wishlist
+                    </button>
+                  </div>
+                  <div className="border-t border-gray-100 pt-2 pb-1">
+                    <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors">
+                      <LogOut className="h-4 w-4" /> Log Out
+                    </button>
+                  </div>
                 </div>
               </>
             )}
           </div>
-        ) : (
-          <button onClick={onSignInClick} className="rounded-full bg-[#e31818] px-5 py-2 text-sm font-bold text-white shadow-md active:scale-95 transition-all hover:bg-red-700">
-            Sign In
-          </button>
-        )}
-      </div>
-    </header>
+        </div>
+      </header>
+
+      {/* Slide-out Mobile Sidebar Menu */}
+      {isMenuOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={() => setIsMenuOpen(false)}></div>
+          
+          <div className="relative w-64 max-w-sm bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-left duration-300">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 overflow-hidden rounded-full border border-gray-200 bg-black flex items-center justify-center">
+                  <img src="/logo.jpg" alt="GameOver Logo" className="h-full w-full object-cover" />
+                </div>
+                <h2 className="font-black text-lg tracking-tighter">GAME<span className="text-gray-400">OVER</span></h2>
+              </div>
+              <button onClick={() => setIsMenuOpen(false)} className="p-2 rounded-full hover:bg-gray-100 transition-colors">
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="flex flex-col p-4 gap-2 flex-1 overflow-y-auto">
+              
+              {isAdmin && (
+                <button onClick={() => { setIsMenuOpen(false); onAdminClick(); }} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 text-left font-bold text-gray-900 transition-colors">
+                  <ShieldCheck className="h-5 w-5 text-black" /> Admin Panel
+                </button>
+              )}
+              <button onClick={() => { setIsMenuOpen(false); onOrdersClick(); }} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 text-left font-bold text-gray-900 transition-colors">
+                <Package className="h-5 w-5 text-gray-500" /> My Orders
+              </button>
+              <button onClick={() => { setIsMenuOpen(false); onWishlistClick(); }} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 text-left font-bold text-gray-900 transition-colors">
+                <Heart className="h-5 w-5 text-gray-500" /> Wishlist
+              </button>
+              
+              {/* SIDEBAR CART BADGE */}
+              <button onClick={() => { setIsMenuOpen(false); onCartClick(); }} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 text-left font-bold text-gray-900 transition-colors">
+                <div className="relative">
+                  <ShoppingCart className="h-5 w-5 text-gray-500" />
+                  {cartCount > 0 && (
+                    <span className="absolute -top-1 -right-2 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-600 text-[8px] font-bold text-white border border-white">
+                      {cartCount}
+                    </span>
+                  )}
+                </div>
+                Cart
+              </button>
+              
+              <div className="border-t border-gray-100 my-2"></div>
+              
+              <button onClick={() => setShowTerms(true)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 text-left font-bold text-gray-900 transition-colors">
+                <FileText className="h-5 w-5 text-gray-500" /> Terms & Conditions
+              </button>
+              <button onClick={() => setShowHotline(true)} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-100 text-left font-bold text-gray-900 transition-colors">
+                <Phone className="h-5 w-5 text-gray-500" /> Hotline
+              </button>
+
+              <div className="mt-auto border-t border-gray-100 pt-4">
+                {user ? (
+                  <>
+                    <button onClick={() => { setIsMenuOpen(false); onProfileClick(); }} className="flex w-full items-center gap-3 p-3 rounded-xl hover:bg-gray-100 text-left font-bold text-gray-900 transition-colors">
+                      <User className="h-5 w-5 text-gray-500" /> Profile Settings
+                    </button>
+                    <button onClick={() => { setIsMenuOpen(false); handleLogout(); }} className="flex w-full items-center gap-3 p-3 mt-2 rounded-xl text-red-600 hover:bg-red-50 text-left font-bold transition-colors">
+                      <LogOut className="h-5 w-5" /> Log Out
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => { setIsMenuOpen(false); onSignInClick(); }} className="flex w-full items-center justify-center gap-2 p-3 rounded-xl bg-black text-white font-bold hover:bg-gray-800 transition-colors">
+                    <LogIn className="h-5 w-5" /> Sign In
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODALS --- */}
+      {showTerms && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowTerms(false)}></div>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2"><FileText className="w-5 h-5" /> Terms & Conditions</h3>
+              <button onClick={() => setShowTerms(false)} className="p-1 rounded-full hover:bg-gray-200"><X className="w-5 h-5 text-gray-500" /></button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              <p className="text-sm text-gray-800 font-medium leading-relaxed whitespace-pre-wrap">
+                Share အကောင့်ဖြစ်တာကြောင့် အောက်ပါစည်းကမ်းချက်များကိုလိုက်နာဖို့လိုအပ်ပါတယ်{"\n\n"}
+                <span className="font-bold text-black">(Security)</span>{"\n"}
+                SIGN IN ID နှင့် Password ကိုမပြောင်းရန်{"\n\n"}
+                <span className="font-bold text-black">(First person Lifetime warranty)</span>{"\n"}
+                ဂိမ်းအကောင့်ကို တခြားသူတစ်ယောက်ထံ စီးပွားဖြစ်ပြန်လည်ရောင်းချခြင်း /ဂိမ်းစက်ထဲသို့ ထည့်သွင်းရောင်းချခြင်းမပြုလုပ်ရန်{"\n\n"}
+                စက်အပြောင်းလဲပြုလုပ်မည်ဆိုပါက Admin များကို အသိပေးပြီး စက်မရောင်းခင် ဂိမ်းအကောင့်ကိုဖျက်ထားပေးဖို့လိုအပ်ပါတယ် ဒီလိုမှ နောက်စက်အသစ်မှာ ဂိမ်းအကောင့်ကိုပြန်သွင်းပေးမှာဖြစ်ပါတယ်{"\n\n"}
+                AA နှင့်DA ကိုသေချာနားလည်ဖို့လိုအပ်ပါတယ်{"\n\n"}
+                စည်းကမ်းဖောက်ဖျက်ခြင်း တစ်စုံတစ်ရာ ရှိပါက အကောင့်အား ယာယီပိတ်သိမ်းခြင်း သို့မဟုတ် အပြီးတိုင်Ban ခြင်းကိုခံရနိုင်ပါတယ်{"\n"}
+                <span className="font-bold text-red-600 mt-2 block">ဝယ်ယူသူအနေနဲ့ အောက်ပါစည်းကမ်းချက်များကိုလိုက်နာနိုင်ပါသလား?</span>
+              </p>
+            </div>
+            <div className="p-4 border-t border-gray-100 bg-white rounded-b-2xl">
+              <button onClick={() => setShowTerms(false)} className="w-full bg-black text-white font-bold py-3 rounded-xl hover:bg-gray-800">I Agree</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showHotline && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowHotline(false)}></div>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm animate-in zoom-in-95 duration-200">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2"><Phone className="w-5 h-5" /> Customer Support</h3>
+              <button onClick={() => setShowHotline(false)} className="p-1 rounded-full hover:bg-gray-200"><X className="w-5 h-5 text-gray-500" /></button>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
+              <a href="tel:09259903642" className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-black transition-colors">
+                <span className="font-bold text-gray-900 tracking-wider">09-259903642</span>
+                <span className="text-xs font-black text-white bg-green-600 px-2 py-1 rounded">CALL</span>
+              </a>
+              <a href="tel:09753341101" className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-black transition-colors">
+                <span className="font-bold text-gray-900 tracking-wider">09-753341101</span>
+                <span className="text-xs font-black text-white bg-green-600 px-2 py-1 rounded">CALL</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

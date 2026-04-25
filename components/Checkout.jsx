@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { UploadCloud, Loader2, CheckCircle, Receipt } from 'lucide-react';
+import { UploadCloud, Loader2, CheckCircle, Receipt, Check } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
@@ -10,6 +10,7 @@ const Checkout = () => {
   const [totalPrice, setTotalPrice] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   
+  const [paymentMethod, setPaymentMethod] = useState('kbzpay'); 
   const [screenshotPreview, setScreenshotPreview] = useState(null);
   const [screenshotFile, setScreenshotFile] = useState(null); 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,10 +25,31 @@ const Checkout = () => {
     setIsLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
-      const { data, error } = await supabase.from('cart').select('id, games(*)').eq('user_id', session.user.id);
+      // CRITICAL FIX: Fetching BOTH games and gift_cards data joins
+      const { data, error } = await supabase
+        .from('cart')
+        .select('id, account_type, selected_option, quantity, games(*), gift_cards(*)')
+        .eq('user_id', session.user.id);
+        
       if (!error && data) {
         setCartItems(data);
-        setTotalPrice(data.reduce((sum, item) => sum + Number(item.games.discount_price || item.games.price), 0));
+        
+        const total = data.reduce((sum, item) => {
+          const isGift = !!item.gift_cards;
+          let priceToUse = 0;
+          
+          if (isGift && item.selected_option) {
+            priceToUse = Number(item.selected_option.price);
+          } else if (item.games) {
+            priceToUse = item.account_type === 'Deactivated Account' 
+              ? (item.games.deactivated_discount || item.games.deactivated_price)
+              : (item.games.discount_price || item.games.price);
+          }
+          
+          return sum + (Number(priceToUse) * (item.quantity || 1));
+        }, 0);
+        
+        setTotalPrice(total);
       }
     }
     setIsLoading(false);
@@ -49,14 +71,12 @@ const Checkout = () => {
     setIsSubmitting(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
-      const orderNo = 'NN' + Math.floor(100000 + Math.random() * 900000);
+      const orderNo = 'GO' + Math.floor(100000 + Math.random() * 900000); 
       setGeneratedOrderNo(orderNo);
 
       const fileExt = screenshotFile.name.split('.').pop();
       const fileName = `receipt-${orderNo}-${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('receipts').upload(fileName, screenshotFile);
-      if (uploadError) throw uploadError;
+      await supabase.storage.from('receipts').upload(fileName, screenshotFile);
       const { data: { publicUrl } } = supabase.storage.from('receipts').getPublicUrl(fileName);
 
       const { error: dbError } = await supabase.from('orders').insert([{
@@ -65,19 +85,30 @@ const Checkout = () => {
         customer_name: session.user.user_metadata?.full_name || session.user.email,
         total_price: totalPrice,
         screenshot_url: publicUrl,
-        items: cartItems.map(item => ({ 
-          id: item.games.id,
-          name: item.games.name, 
-          price: item.games.discount_price || item.games.price, 
-          cover_image: item.games.cover_image 
-        })),
-        status: 'pending'
+        items: cartItems.map(item => {
+          const isGift = !!item.gift_cards;
+          const targetItem = isGift ? item.gift_cards : item.games;
+          
+          let priceToUse = 0;
+          if (isGift) priceToUse = item.selected_option.price;
+          else priceToUse = item.account_type === 'Deactivated Account' ? (targetItem.deactivated_discount || targetItem.deactivated_price) : (targetItem.discount_price || targetItem.price);
+
+          return { 
+            id: targetItem.id,
+            name: targetItem.name, 
+            account_type: isGift ? item.selected_option.label : item.account_type,
+            price: priceToUse,
+            quantity: item.quantity || 1,
+            cover_image: targetItem.cover_image || targetItem.image 
+          };
+        }),
+        status: 'pending',
+        delivery_info: `Payment Method Used: ${paymentMethod.toUpperCase()}`
       }]);
       if (dbError) throw dbError;
 
       await supabase.from('cart').delete().eq('user_id', session.user.id);
       window.dispatchEvent(new Event('cartUpdated'));
-
       setIsSuccess(true);
     } catch (error) {
       toast.error(error.message || "Failed to submit payment.");
@@ -86,9 +117,8 @@ const Checkout = () => {
     }
   };
 
-  // Check if any item in the cart is a pre-order
   const hasPreOrder = cartItems.some(item => 
-    item.games.collections && item.games.collections.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'))
+    item.games?.collections && item.games.collections.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'))
   );
 
   if (isSuccess) {
@@ -96,7 +126,7 @@ const Checkout = () => {
       <div className="flex min-h-[70vh] flex-col items-center justify-center px-6 text-center animate-in zoom-in duration-500">
         <div className="rounded-full bg-green-100 p-4 mb-6"><CheckCircle className="h-16 w-16 text-green-600" /></div>
         <h2 className="text-2xl font-black text-gray-900">Order Placed!</h2>
-        <p className="mt-2 text-lg font-bold text-blue-600">Order No: {generatedOrderNo}</p>
+        <p className="mt-2 text-lg font-bold text-black">Order No: {generatedOrderNo}</p>
         <p className="mt-3 text-sm text-gray-500 leading-relaxed">
           We are checking your payment. You can track your status in the "My Orders" menu.
         </p>
@@ -104,45 +134,121 @@ const Checkout = () => {
     );
   }
 
-  if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-red-600" /></div>;
+  if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-black" /></div>;
 
   return (
     <div className="flex flex-col px-4 pb-20 pt-2">
+      
+      {/* Order Summary */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
         <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-gray-900 border-b border-gray-100 pb-3"><Receipt className="h-5 w-5 text-gray-500" /> Order Summary</h2>
-        <div className="flex flex-col gap-3">
-          {cartItems.map((item) => (
-            <div key={item.id} className="flex justify-between items-center">
-              <span className="text-sm font-semibold text-gray-700 truncate pr-4">1x {item.games.name}</span>
-              <span className="text-sm font-bold text-gray-900 whitespace-nowrap">{item.games.discount_price || item.games.price} MMK</span>
-            </div>
-          ))}
+        <div className="flex flex-col gap-4">
+          {cartItems.map((item) => {
+            const isGift = !!item.gift_cards;
+            const targetItem = isGift ? item.gift_cards : item.games;
+            const itemQty = item.quantity || 1;
+            
+            let itemPrice = 0;
+            if (isGift) itemPrice = item.selected_option.price;
+            else itemPrice = item.account_type === 'Deactivated Account' ? (targetItem.deactivated_discount || targetItem.deactivated_price) : (targetItem.discount_price || targetItem.price);
+
+            const totalItemPrice = Number(itemPrice) * itemQty;
+
+            return (
+              <div key={item.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
+                <div className="flex flex-col truncate pr-4">
+                  <span className="text-sm font-bold text-gray-900 truncate">{itemQty}x {targetItem?.name}</span>
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-1">
+                    {isGift ? item.selected_option?.label : item.account_type}
+                  </span>
+                </div>
+                <span className="text-sm font-black text-black whitespace-nowrap">{totalItemPrice.toLocaleString()} MMK</span>
+              </div>
+            );
+          })}
         </div>
         <div className="mt-4 flex justify-between border-t border-dashed border-gray-200 pt-4">
           <span className="font-bold text-gray-900">Total</span>
-          <span className="text-lg font-black text-[#e31818]">{totalPrice.toLocaleString()} MMK</span>
+          <span className="text-lg font-black text-black">{totalPrice.toLocaleString()} MMK</span>
         </div>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-2xl shadow-sm border border-gray-100 bg-white">
-        <div className="bg-[#005fb8] p-4 text-center text-white"><p className="text-sm font-medium leading-relaxed">မိမိထံ ငွေပေးချေရန် KBZPay QR Scanner ကို အသုံးပြုပါ။</p></div>
-        <div className="flex flex-col items-center bg-[#005fb8] pb-8 pt-2">
-          <div className="w-72 overflow-hidden rounded-xl bg-white p-2 shadow-2xl sm:w-80">
-            <img src="/kbzpay.jpg" alt="KBZPay QR Code" className="w-full h-auto object-contain" onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/300?text=Missing+QR+Image"; }} />
-          </div>
-          <h3 className="mt-5 text-lg font-bold text-white tracking-wide">Nyi Nyi Min Thant</h3>
+      {/* Payment Method Selection */}
+      <div className="mt-6 rounded-2xl shadow-sm border border-gray-100 bg-white overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+          <h2 className="text-base font-bold text-gray-900">Payment Method</h2>
         </div>
+        
+        <div className="p-4 flex flex-col gap-3">
+          {/* KBZPay Option */}
+          <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'kbzpay' ? 'border-green-500 bg-green-50/30 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm border border-gray-100 p-1.5"><img src="/kbz_logo.png" alt="KBZPay Logo" className="max-h-full max-w-full object-contain" /></div>
+              <div><p className="font-bold text-gray-900 text-base">KBZPay</p><p className="text-xs font-semibold text-gray-500 mt-0.5">0% commission rate</p></div>
+            </div>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center border transition-colors ${paymentMethod === 'kbzpay' ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}>
+              {paymentMethod === 'kbzpay' && <Check className="w-4 h-4 text-white" />}
+            </div>
+            <input type="radio" name="paymentMethod" value="kbzpay" className="hidden" checked={paymentMethod === 'kbzpay'} onChange={(e) => setPaymentMethod(e.target.value)} />
+          </label>
+
+          {/* Wave Pay Option */}
+          <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'wavepay' ? 'border-green-500 bg-green-50/30 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm border border-gray-100 p-1.5"><img src="/wave_logo.jpg" alt="Wave Pay Logo" className="max-h-full max-w-full object-contain rounded-md" /></div>
+              <div><p className="font-bold text-gray-900 text-base">Wave Pay</p><p className="text-xs font-semibold text-gray-500 mt-0.5">0% commission rate</p></div>
+            </div>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center border transition-colors ${paymentMethod === 'wavepay' ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}>
+              {paymentMethod === 'wavepay' && <Check className="w-4 h-4 text-white" />}
+            </div>
+            <input type="radio" name="paymentMethod" value="wavepay" className="hidden" checked={paymentMethod === 'wavepay'} onChange={(e) => setPaymentMethod(e.target.value)} />
+          </label>
+        </div>
+      </div>
+
+      {/* Dynamic QR & UPLOAD SECTION */}
+      <div className="mt-6 overflow-hidden rounded-2xl shadow-sm border border-gray-100 bg-white">
+        <div className="p-8 flex flex-col items-center border-b border-gray-100 bg-gray-50/50">
+          {paymentMethod === 'kbzpay' && (
+            <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
+              <div className="w-56 overflow-hidden rounded-xl bg-white p-2 shadow-lg border-2 border-[#005fb8]"><img src="/kbzpay.jpg" alt="KBZPay QR Code" className="w-full h-auto object-contain" /></div>
+              <div className="text-center mt-5">
+                <h3 className="text-base font-bold text-gray-800">Mg Pyae Phyoe Oo</h3>
+                <p className="text-sm font-black text-[#005fb8] bg-blue-50 px-3 py-1.5 rounded-lg mt-1 tracking-wider">*******1101</p>
+              </div>
+            </div>
+          )}
+
+          {paymentMethod === 'wavepay' && (
+            <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
+              <div className="w-56 overflow-hidden rounded-xl bg-white p-2 shadow-lg border-2 border-[#fac800]"><img src="/wavepay.jpg" alt="WavePay QR Code" className="w-full h-auto object-contain" /></div>
+              <div className="text-center mt-5">
+                <h3 className="text-base font-bold text-gray-800">Pyae Phyo Oo</h3>
+                <p className="text-sm font-black text-[#fac800] bg-yellow-50 px-3 py-1.5 rounded-lg mt-1 tracking-wider">09259903642</p>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="p-6 text-center bg-white">
-          <p className="mb-4 text-sm font-semibold text-gray-500 leading-relaxed px-4">After transferring the exact amount, please upload a screenshot of your successful transaction.</p>
+          <p className="mb-4 text-sm font-semibold text-gray-500 leading-relaxed px-2">
+            After transferring the exact amount via <span className="font-bold text-black">{paymentMethod === 'kbzpay' ? 'KBZPay' : 'Wave Pay'}</span>, please upload a screenshot of your successful transaction.
+          </p>
           <label className="relative flex w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 px-4 py-8 hover:bg-gray-100 transition-colors">
-            {screenshotPreview ? <img src={screenshotPreview} alt="Receipt Preview" className="h-32 object-contain" /> : <div className="flex flex-col items-center"><UploadCloud className="mb-2 h-8 w-8 text-gray-400" /><span className="text-sm font-bold text-gray-500">Tap to Select Screenshot</span></div>}
+            {screenshotPreview ? (
+              <img src={screenshotPreview} alt="Receipt Preview" className="h-32 object-contain shadow-sm rounded-lg" />
+            ) : (
+              <div className="flex flex-col items-center">
+                <UploadCloud className="mb-2 h-8 w-8 text-gray-400" />
+                <span className="text-sm font-bold text-gray-500">Tap to Select Screenshot</span>
+              </div>
+            )}
             <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
           </label>
         </div>
       </div>
 
-      {/* --- UPDATED BUTTON TEXT --- */}
-      <button onClick={handleConfirmPayment} disabled={isSubmitting || cartItems.length === 0} className="mt-6 w-full rounded-xl bg-[#e31818] py-4 font-bold text-white shadow-lg shadow-red-500/30 hover:bg-red-700 active:scale-95 transition-all disabled:opacity-50 flex justify-center items-center gap-2">
+      <button onClick={handleConfirmPayment} disabled={isSubmitting || cartItems.length === 0} className="mt-6 w-full rounded-xl bg-black py-4 font-bold text-white shadow-lg shadow-gray-500/30 hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 flex justify-center items-center gap-2">
         {isSubmitting && <Loader2 className="h-5 w-5 animate-spin" />}
         {isSubmitting ? 'Processing Payment...' : (hasPreOrder ? 'Proceed to Pre-Order' : 'Confirm Payment')}
       </button>

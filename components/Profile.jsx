@@ -159,7 +159,7 @@ const Profile = ({ onBack }) => {
             className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 placeholder-gray-500 outline-none" />
           <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required placeholder="New Password" 
             className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 placeholder-gray-500 outline-none" />
-          <button type="submit" disabled={isUpdating} className="w-full rounded-xl bg-[#e31818] py-3.5 font-bold text-white active:scale-95">
+          <button type="submit" disabled={isUpdating} className="w-full rounded-xl bg-[#000000] py-3.5 font-bold text-white active:scale-95">
             Update Password
           </button>
         </form>

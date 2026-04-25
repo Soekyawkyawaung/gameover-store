@@ -51,7 +51,6 @@ const LiveChat = () => {
     if (isAdmin && selectedCustomerId) fetchMessages(selectedCustomerId);
   }, [selectedCustomerId, isAdmin]);
 
-  // --- Foolproof Unread Counter using Local Storage ---
   const fetchMessageCount = async (currentUser, adminCheck) => {
     let query = supabase.from('messages').select('*', { count: 'exact', head: true });
     
@@ -68,11 +67,9 @@ const LiveChat = () => {
       const storageKey = `chat_read_count_${currentUser.id}`;
       
       if (isOpenRef.current) {
-        // If chat is OPEN, save the new total to memory and clear the bubble
         localStorage.setItem(storageKey, count.toString());
         setUnreadCount(0);
       } else {
-        // If chat is CLOSED, compare total with memory
         const lastRead = parseInt(localStorage.getItem(storageKey) || '0');
         if (count > lastRead) {
           setUnreadCount(count - lastRead);
@@ -110,7 +107,8 @@ const LiveChat = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setUser(session.user);
-        const adminCheck = session.user.email === 'kyone94@gmail.com';
+        // CHANGED: Using GameOver Admin Email
+        const adminCheck = session.user.email === 'pyaephyo.gameover@gmail.com';
         setIsAdmin(adminCheck);
 
         fetchMessageCount(session.user, adminCheck);
@@ -121,13 +119,13 @@ const LiveChat = () => {
     };
     initChat();
 
-    // Background timer runs every 3 seconds
     const interval = setInterval(() => {
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
-          const adminCheck = session.user.email === 'kyone94@gmail.com';
+          // CHANGED: Using GameOver Admin Email
+          const adminCheck = session.user.email === 'pyaephyo.gameover@gmail.com';
           
-          fetchMessageCount(session.user, adminCheck); // Update notification bubble
+          fetchMessageCount(session.user, adminCheck); 
           
           if (adminCheck) {
             fetchActiveChats();
@@ -166,7 +164,6 @@ const LiveChat = () => {
       toast.error("Failed to send message.");
     } else {
       fetchMessages(roomId);
-      // Immediately update our "read" memory so we don't trigger our own notification bubble
       fetchMessageCount(user, isAdmin); 
     }
   };
@@ -199,13 +196,13 @@ const LiveChat = () => {
       {!isOpen && (
         <button 
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-[200] flex items-center justify-center gap-2 rounded-full bg-[#e31818] p-4 font-bold text-white shadow-2xl hover:bg-red-700 hover:scale-105 active:scale-95 transition-all"
+          className="fixed bottom-6 right-6 z-[200] flex items-center justify-center gap-2 rounded-full bg-black p-4 font-bold text-white shadow-2xl hover:bg-gray-800 hover:scale-105 active:scale-95 transition-all"
         >
           <div className="relative">
             <MessageCircle className="h-6 w-6" />
             {/* UNREAD NOTIFICATION BUBBLE */}
             {unreadCount > 0 && (
-              <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-black text-[#e31818] shadow-md border-2 border-[#e31818] animate-in zoom-in duration-300">
+              <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-black text-black shadow-md border-2 border-black animate-in zoom-in duration-300">
                 {unreadCount}
               </span>
             )}
@@ -218,7 +215,7 @@ const LiveChat = () => {
       {isOpen && (
         <div className="fixed bottom-6 right-6 z-[200] flex h-[500px] w-[350px] max-w-[90vw] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-gray-200 animate-in slide-in-from-bottom-10 duration-300">
           
-          <div className="flex items-center justify-between bg-[#e31818] p-4 text-white">
+          <div className="flex items-center justify-between bg-black p-4 text-white">
             <div className="flex items-center gap-2">
               {isAdmin && selectedCustomerId ? (
                 <button onClick={() => setSelectedCustomerId(null)} className="hover:bg-white/20 p-1 rounded-full"><ArrowLeft className="h-5 w-5" /></button>
@@ -228,7 +225,7 @@ const LiveChat = () => {
               <h3 className="font-bold">
                 {isAdmin 
                   ? (selectedCustomerId ? selectedCustomerName : 'Customer Inboxes') 
-                  : 'Nyi Nyi Support'}
+                  : 'GameOver Support'}
               </h3>
             </div>
             <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 p-1 rounded-full transition-colors"><X className="h-5 w-5" /></button>
@@ -260,27 +257,12 @@ const LiveChat = () => {
                   messages.map((msg) => {
                     const isMe = msg.sender_id === user.id;
                     return (
-                      <div key={msg.id} className={`flex flex-col max-w-[80%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}>
+                      <div key={msg.id} className={`flex flex-col max-w-[80%] ${isMe ? 'self-end' : 'self-start'}`}>
                         {!isMe && <span className="text-[10px] font-bold text-gray-400 mb-1 ml-1">{msg.is_admin ? 'Admin' : msg.customer_name}</span>}
-                        
-                        {/* --- FIXED: IMAGE RENDERED OUTSIDE THE BUBBLE --- */}
-                        {msg.image_url && (
-                          <a href={msg.image_url} target="_blank" rel="noreferrer" className={msg.content ? "mb-1.5" : ""}>
-                            <img 
-                              src={msg.image_url} 
-                              alt="attachment" 
-                              className={`max-w-full cursor-pointer shadow-sm border border-gray-100 object-cover ${isMe ? 'rounded-2xl rounded-br-sm' : 'rounded-2xl rounded-bl-sm'}`} 
-                              style={{ maxHeight: '220px' }} 
-                            />
-                          </a>
-                        )}
-
-                        {/* --- TEXT RENDERED INSIDE THE BUBBLE --- */}
-                        {msg.content && (
-                          <div className={`rounded-2xl p-3 text-sm ${isMe ? 'bg-[#e31818] text-white rounded-br-none' : 'bg-white border border-gray-200 text-gray-900 rounded-bl-none shadow-sm'}`}>
-                            <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                          </div>
-                        )}
+                        <div className={`rounded-2xl p-3 text-sm ${isMe ? 'bg-black text-white rounded-br-none' : 'bg-white border border-gray-200 text-gray-900 rounded-bl-none shadow-sm'}`}>
+                          {msg.image_url && <a href={msg.image_url} target="_blank" rel="noreferrer"><img src={msg.image_url} alt="attachment" className="rounded-lg mb-2 max-w-full h-auto cursor-pointer" /></a>}
+                          {msg.content && <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>}
+                        </div>
                       </div>
                     );
                   })
@@ -290,7 +272,7 @@ const LiveChat = () => {
 
               <form onSubmit={handleSendMessage} className="flex items-center gap-2 bg-white p-3 border-t border-gray-200">
                 <label className="cursor-pointer p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors">
-                  {isUploading ? <Loader2 className="h-5 w-5 animate-spin text-[#e31818]" /> : <ImageIcon className="h-5 w-5" />}
+                  {isUploading ? <Loader2 className="h-5 w-5 animate-spin text-black" /> : <ImageIcon className="h-5 w-5" />}
                   <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={isUploading} />
                 </label>
                 
@@ -302,7 +284,7 @@ const LiveChat = () => {
                   className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none text-gray-900 placeholder-gray-500"
                 />
                 
-                <button type="submit" disabled={!newMessage.trim() && !isUploading} className="p-2 text-[#e31818] hover:bg-red-50 rounded-full transition-colors disabled:opacity-50 disabled:hover:bg-transparent">
+                <button type="submit" disabled={!newMessage.trim() && !isUploading} className="p-2 text-black hover:bg-gray-100 rounded-full transition-colors disabled:opacity-50 disabled:hover:bg-transparent">
                   <Send className="h-5 w-5" />
                 </button>
               </form>

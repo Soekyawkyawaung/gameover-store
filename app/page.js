@@ -21,6 +21,7 @@ export default function Home() {
   const [showAuth, setShowAuth] = useState(false); 
   
   const [games, setGames] = useState([]);
+  const [giftCards, setGiftCards] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedGame, setSelectedGame] = useState(null);
@@ -34,31 +35,31 @@ export default function Home() {
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
 
   useEffect(() => {
-    const fetchGames = async () => {
-      const { data, error } = await supabase.from('games').select('*').order('created_at', { ascending: false });
-      if (data) setGames(data);
+    const fetchStoreData = async () => {
+      setIsLoading(true);
+      const { data: gamesData } = await supabase.from('games').select('*').order('created_at', { ascending: false });
+      const { data: giftsData } = await supabase.from('gift_cards').select('*').order('created_at', { ascending: false });
+      
+      if (gamesData) setGames(gamesData);
+      if (giftsData) setGiftCards(giftsData);
       setIsLoading(false);
     };
-    fetchGames();
+    fetchStoreData();
   }, []);
 
-  // --- NEW STRICT FILTERING LOGIC ---
   const isPreOrder = (game) => game.collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'));
 
-  // Exclude Pre-Orders from New Games and PS5 categories
-  const newGames = games.filter(game => game.collections.some(c => c.toLowerCase().includes('new games')) && !isPreOrder(game));
-  const ps5GamesCategory = games.filter(game => game.collections.some(c => c.toLowerCase().includes('ps5 games')) && !isPreOrder(game));
-  
-  // Dedicated Pre-Order List
+  const newGames = games.filter(game => game.collections?.some(c => c.toLowerCase().includes('new games')) && !isPreOrder(game));
+  const ps5GamesCategory = games.filter(game => game.collections?.some(c => c.toLowerCase().includes('ps5 games')) && !isPreOrder(game));
   const preOrderGames = games.filter(game => isPreOrder(game));
 
   const searchResults = games.filter(game => game.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  const allUniqueGenres = [...new Set(games.flatMap(g => g.collections.filter(c => c !== "PS4 Games" && c !== "PS5 Games")))];
+  const allUniqueGenres = [...new Set(games.flatMap(g => g.collections?.filter(c => c !== "PS4 Games" && c !== "PS5 Games") || []))];
   const priceRanges = ['10,000 - 50,000 MMK', '50,000 - 100,000 MMK', '100,000 - 150,000 MMK', 'Over 150,000 MMK'];
 
-  const handleGameClick = (game) => {
-    setSelectedGame(game);
+  const handleGameClick = (item) => {
+    setSelectedGame(item);
     setCurrentView('details');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -82,6 +83,7 @@ export default function Home() {
   };
 
   const renderPlatformTags = (collections) => {
+    if (!collections) return null;
     let platforms = [];
     if (collections.includes("PS4 Games")) platforms.push("PS4");
     if (collections.includes("PS5 Games")) platforms.push("PS5");
@@ -109,13 +111,13 @@ export default function Home() {
 
     let matchesGenre = true;
     if (selectedGenres.length > 0) {
-      matchesGenre = selectedGenres.some(g => game.collections.includes(g));
+      matchesGenre = selectedGenres.some(g => game.collections?.includes(g));
     }
 
     let matchesPlatform = true;
     if (selectedPlatforms.length > 0) {
-      const hasPS4 = game.collections.includes("PS4 Games");
-      const hasPS5 = game.collections.includes("PS5 Games");
+      const hasPS4 = game.collections?.includes("PS4 Games");
+      const hasPS5 = game.collections?.includes("PS5 Games");
       matchesPlatform = (selectedPlatforms.includes('PS4') && hasPS4) || (selectedPlatforms.includes('PS5') && hasPS5);
     }
 
@@ -144,7 +146,7 @@ export default function Home() {
       <div className="relative mx-auto min-h-screen max-w-md bg-white shadow-2xl pb-20 overflow-x-hidden">
         <Toaster position="top-center" />
 
-        {currentView !== 'details' && currentView !== 'cart' && currentView !== 'wishlist' && currentView !== 'orders' && currentView !== 'seeAll' && (
+        {currentView !== 'details' && currentView !== 'cart' && currentView !== 'wishlist' && currentView !== 'orders' && currentView !== 'seeAll' && currentView !== 'checkout' && (
           <Header 
             onSignInClick={() => setShowAuth(true)} 
             onProfileClick={() => setCurrentView('profile')}
@@ -164,14 +166,20 @@ export default function Home() {
           {currentView === 'orders' && <MyOrders onBack={() => setCurrentView('store')} />}
           
           {currentView === 'checkout' && (
-            <div className="animate-in slide-in-from-right duration-300 bg-white min-h-screen">
-              <button onClick={() => setCurrentView('cart')} className="m-4 text-sm font-bold text-blue-600 hover:underline">← Back to Cart</button>
+            <div className="animate-in slide-in-from-right duration-300 bg-white min-h-screen pt-4">
+              <button onClick={() => setCurrentView('cart')} className="mx-4 mb-2 text-sm font-bold text-blue-600 hover:underline">← Back to Cart</button>
               <Checkout />
             </div>
           )}
 
           {currentView === 'details' && selectedGame && (
-            <ProductDetail game={selectedGame} allGames={games} onBack={() => setCurrentView('store')} onBuyNow={() => checkAuthAndNavigate('checkout')} onGameClick={handleGameClick} />
+            <ProductDetail 
+              game={selectedGame} 
+              allGames={[...games, ...giftCards]} 
+              onBack={() => setCurrentView('store')} 
+              onBuyNow={() => checkAuthAndNavigate('checkout')} 
+              onGameClick={handleGameClick} 
+            />
           )}
 
           {/* --- "SEE ALL" GRID VIEW --- */}
@@ -180,12 +188,12 @@ export default function Home() {
               <div className="sticky top-0 z-40 flex items-center justify-between bg-white px-4 py-4 shadow-sm">
                 <div className="flex items-center">
                   <button onClick={() => setCurrentView('store')} className="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-all"><ArrowLeft className="h-6 w-6 text-gray-800" /></button>
-                  <h1 className="ml-2 text-xl font-black text-gray-900">{seeAllTitle}</h1>
+                  <h1 className="ml-2 text-xl font-black text-gray-900 truncate max-w-[200px]">{seeAllTitle}</h1>
                 </div>
                 <button onClick={() => setIsFilterOpen(true)} className="relative p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors">
                   <Filter className="h-5 w-5 text-gray-800" />
                   {activeFilterCount > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#e31818] text-[9px] font-bold text-white border border-white">
+                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#000000] text-[9px] font-bold text-white border border-white">
                       {activeFilterCount}
                     </span>
                   )}
@@ -204,7 +212,7 @@ export default function Home() {
                       </div>
                       <div>
                         <h3 className="text-xs font-bold text-gray-900 truncate">{game.name}</h3>
-                        <p className="text-xs font-semibold text-[#e31818] mt-0.5">{game.discount_price || game.price} MMK</p>
+                        <p className="text-xs font-semibold text-[#000000] mt-0.5">{game.discount_price || game.price} MMK</p>
                       </div>
                     </div>
                   ))
@@ -248,7 +256,7 @@ export default function Home() {
                         {allUniqueGenres.map(genre => (
                           <label key={genre} className="flex items-center justify-between py-3 cursor-pointer group border-b border-gray-50 last:border-0">
                             <span className="text-sm font-bold text-gray-700 group-hover:text-black transition-colors">{genre}</span>
-                            <div className={`h-6 w-6 rounded-lg border flex items-center justify-center transition-all ${selectedGenres.includes(genre) ? 'bg-[#e31818] border-[#e31818] shadow-sm' : 'border-gray-300 bg-gray-50 group-hover:border-gray-400'}`}>
+                            <div className={`h-6 w-6 rounded-lg border flex items-center justify-center transition-all ${selectedGenres.includes(genre) ? 'bg-[#000000] border-[#000000] shadow-sm' : 'border-gray-300 bg-gray-50 group-hover:border-gray-400'}`}>
                               {selectedGenres.includes(genre) && <Check className="h-4 w-4 text-white" />}
                             </div>
                             <input type="checkbox" className="hidden" checked={selectedGenres.includes(genre)} onChange={() => toggleFilter('genre', genre)} />
@@ -262,7 +270,7 @@ export default function Home() {
                     <button onClick={() => { setSelectedPrices([]); setSelectedGenres([]); setSelectedPlatforms([]); }} className="flex-1 py-4 text-sm font-bold text-gray-500 hover:text-black transition-colors">
                       Clear all
                     </button>
-                    <button onClick={() => setIsFilterOpen(false)} className="flex-[2] py-4 rounded-xl bg-[#e31818] text-white text-sm font-bold shadow-lg shadow-red-500/30 active:scale-95 transition-all hover:bg-red-700">
+                    <button onClick={() => setIsFilterOpen(false)} className="flex-[2] py-4 rounded-xl bg-[#000000] text-white text-sm font-bold shadow-lg shadow-red-500/30 active:scale-95 transition-all hover:bg-red-700">
                       Show {filteredSeeAllGames.length} results
                     </button>
                   </div>
@@ -284,7 +292,7 @@ export default function Home() {
               <HeroSlider />
 
               {isLoading ? (
-                <div className="p-8 text-center text-sm font-bold text-gray-500">Loading your games...</div>
+                <div className="p-8 text-center text-sm font-bold text-gray-500">Loading your store...</div>
               ) : searchQuery ? (
                 <div className="px-4 mt-6">
                   <h2 className="mb-4 text-lg font-bold text-gray-900">Search Results</h2>
@@ -299,7 +307,7 @@ export default function Home() {
                           <div className="flex w-2/3 flex-col justify-between p-3">
                             <div>
                               <h3 className="text-sm font-bold text-gray-900 leading-tight truncate">{game.name}</h3>
-                              <p className="mt-1 text-sm font-extrabold text-[#e31818]">{game.discount_price || game.price} MMK</p>
+                              <p className="mt-1 text-sm font-extrabold text-[#000000]">{game.discount_price || game.price} MMK</p>
                             </div>
                           </div>
                         </div>
@@ -327,7 +335,7 @@ export default function Home() {
                           <div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 shadow-sm border border-gray-100"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div>
                           <div>
                             <h3 className="text-xs font-bold text-gray-900 truncate">{game.name}</h3>
-                            <p className="text-xs font-semibold text-[#e31818] mt-0.5">{game.discount_price || game.price} MMK</p>
+                            <p className="text-xs font-semibold text-[#000000] mt-0.5">{game.discount_price || game.price} MMK</p>
                           </div>
                         </div>
                       ))
@@ -351,14 +359,14 @@ export default function Home() {
                           <div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 shadow-sm border border-gray-100"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div>
                           <div>
                             <h3 className="text-xs font-bold text-gray-900 truncate">{game.name}</h3>
-                            <p className="text-xs font-semibold text-[#e31818] mt-0.5">{game.discount_price || game.price} MMK</p>
+                            <p className="text-xs font-semibold text-[#000000] mt-0.5">{game.discount_price || game.price} MMK</p>
                           </div>
                         </div>
                       ))
                     )}
                   </div>
 
-                  {/* --- NEW BLOCK: PRE-ORDERS --- */}
+                  {/* PRE-ORDERS */}
                   <div className="px-4 flex justify-between items-end mb-4 mt-8">
                     <h2 className="text-lg font-bold text-gray-900">Pre-Orders</h2>
                     {preOrderGames.length > 0 && (
@@ -375,11 +383,36 @@ export default function Home() {
                           <div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 shadow-sm border border-gray-100"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div>
                           <div>
                             <h3 className="text-xs font-bold text-gray-900 truncate">{game.name}</h3>
-                            <p className="text-xs font-semibold text-[#e31818] mt-0.5">{game.discount_price || game.price} MMK</p>
+                            <p className="text-xs font-semibold text-[#000000] mt-0.5">{game.discount_price || game.price} MMK</p>
                           </div>
                         </div>
                       ))
                     )}
+                  </div>
+
+                  {/* --- FIXED: GIFT CARDS SECTION SHOWING LOWEST BASE PRICE --- */}
+                  <div className="px-4 mt-8 mb-12">
+                    <h2 className="text-lg font-bold text-gray-900 mb-4">Gift Cards</h2>
+                    <div className="grid grid-cols-2 gap-4">
+                      {giftCards.map((card) => {
+                        // Find the cheapest option dynamically
+                        const lowestPrice = card.options && card.options.length > 0 
+                          ? Math.min(...card.options.map(o => Number(o.price))) 
+                          : 0;
+
+                        return (
+                          <div key={card.id} onClick={() => handleGameClick(card)} className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm active:scale-95 transition-transform cursor-pointer group">
+                            <div className="aspect-[4/3] rounded-xl overflow-hidden mb-3 bg-gray-50 flex items-center justify-center p-2">
+                              <img src={card.image} className="h-full w-full object-contain group-hover:scale-110 transition-transform" alt={card.name} />
+                            </div>
+                            <h3 className="text-xs font-bold text-gray-900 truncate">{card.name}</h3>
+                            <p className="text-xs font-semibold text-[#000000] mt-0.5">
+                              From {lowestPrice.toLocaleString()} MMK
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
                 </div>

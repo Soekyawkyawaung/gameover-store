@@ -90,7 +90,7 @@ const Wishlist = ({ onBack, onGameClick }) => {
                 <div className="flex w-2/3 flex-col justify-between p-3">
                   <div onClick={() => onGameClick(item.games)} className="cursor-pointer">
                     <h3 className="text-sm font-bold text-gray-900 leading-tight">{item.games.name}</h3>
-                    <p className="mt-1 text-sm font-extrabold text-[#e31818]">{item.games.discount_price || item.games.price} MMK</p>
+                    <p className="mt-1 text-sm font-extrabold text-[#000000]">{item.games.discount_price || item.games.price} MMK</p>
                   </div>
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => handleRemove(item.id)} className="flex items-center justify-center rounded-lg bg-gray-100 p-2 text-gray-600 hover:bg-red-50 hover:text-red-600">

@@ -80,7 +80,7 @@ const MyOrders = ({ onBack }) => {
                   
                   <div className="mt-2 pt-4 border-t border-gray-100 flex justify-between items-center">
                     <span className="font-bold text-gray-900">Total</span>
-                    <span className="font-black text-[#e31818] text-lg">{order.total_price.toLocaleString()} MMK</span>
+                    <span className="font-black text-[#000000] text-lg">{order.total_price.toLocaleString()} MMK</span>
                   </div>
 
                   {/* RETRIEVE BUTTON (Only shows when Paid AND Admin has entered info) */}

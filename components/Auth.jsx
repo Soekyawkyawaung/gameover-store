@@ -134,9 +134,9 @@ const Auth = ({ onClose }) => {
             <div className="flex justify-end">
               <button type="button" onClick={() => setStep('forgot')} className="text-xs font-semibold text-blue-600 hover:underline">Forgot Password?</button>
             </div>
-            <button type="submit" disabled={loading} className="mt-2 w-full rounded-lg bg-[#e31818] py-2.5 font-bold text-white shadow-md hover:bg-red-700 disabled:opacity-50">{loading ? 'Logging in...' : 'Log In'}</button>
+            <button type="submit" disabled={loading} className="mt-2 w-full rounded-lg bg-[#000000] py-2.5 font-bold text-white shadow-md hover:bg-red-700 disabled:opacity-50">{loading ? 'Logging in...' : 'Log In'}</button>
             <div className="mt-2 text-center text-sm text-gray-600">
-              New user? <button type="button" onClick={() => setStep('signup')} className="font-bold text-[#e31818] hover:underline">Sign up</button>
+              New user? <button type="button" onClick={() => setStep('signup')} className="font-bold text-[#000000] hover:underline">Sign up</button>
             </div>
           </form>
         )}
@@ -166,20 +166,20 @@ const Auth = ({ onClose }) => {
               <Lock className="h-5 w-5 text-gray-500" />
               <input type="password" required placeholder="Re-enter Password" value={verifyPassword} onChange={(e) => setVerifyPassword(e.target.value)} className="ml-2 w-full bg-transparent text-sm font-medium placeholder-gray-500 outline-none" />
             </div>
-            <button type="submit" disabled={loading} className="mt-2 w-full rounded-lg bg-[#e31818] py-2.5 font-bold text-white shadow-md hover:bg-red-700 disabled:opacity-50">{loading ? 'Sending Code...' : 'Sign Up'}</button>
+            <button type="submit" disabled={loading} className="mt-2 w-full rounded-lg bg-[#000000] py-2.5 font-bold text-white shadow-md hover:bg-red-700 disabled:opacity-50">{loading ? 'Sending Code...' : 'Sign Up'}</button>
             <div className="mt-2 text-center text-sm text-gray-600">
-              Already have an account? <button type="button" onClick={() => setStep('login')} className="font-bold text-[#e31818] hover:underline">Log in</button>
+              Already have an account? <button type="button" onClick={() => setStep('login')} className="font-bold text-[#000000] hover:underline">Log in</button>
             </div>
           </form>
         )}
 
         {step === 'verify' && (
           <form onSubmit={handleVerify} className="flex flex-col gap-4 text-center">
-            <ShieldCheck className="mx-auto h-12 w-12 text-[#e31818]" />
+            <ShieldCheck className="mx-auto h-12 w-12 text-[#000000]" />
             <h2 className="text-xl font-bold text-gray-800">Verify Email</h2>
             <p className="text-sm text-gray-600">Enter 8-digit code for <br/><span className="font-bold text-black">{email}</span></p>
-            <input type="text" required maxLength="8" value={code} onChange={(e) => setCode(e.target.value)} placeholder="00000000" className="mx-auto mt-4 w-56 rounded-lg border-2 border-gray-300 bg-white py-3 text-center text-2xl font-bold tracking-[0.2em] outline-none text-gray-900 focus:border-[#e31818]" />
-            <button type="submit" disabled={loading} className="mt-4 w-full rounded-lg bg-[#e31818] py-2.5 font-bold text-white shadow-md hover:bg-red-700 disabled:opacity-50">{loading ? 'Verifying...' : 'Verify & Login'}</button>
+            <input type="text" required maxLength="8" value={code} onChange={(e) => setCode(e.target.value)} placeholder="00000000" className="mx-auto mt-4 w-56 rounded-lg border-2 border-gray-300 bg-white py-3 text-center text-2xl font-bold tracking-[0.2em] outline-none text-gray-900 focus:border-[#000000]" />
+            <button type="submit" disabled={loading} className="mt-4 w-full rounded-lg bg-[#000000] py-2.5 font-bold text-white shadow-md hover:bg-red-700 disabled:opacity-50">{loading ? 'Verifying...' : 'Verify & Login'}</button>
           </form>
         )}
 
@@ -202,7 +202,7 @@ const Auth = ({ onClose }) => {
             <input type="text" required maxLength="8" value={code} onChange={(e) => setCode(e.target.value)} placeholder="8-digit code" className="mx-auto w-56 rounded-lg border-2 border-gray-300 py-2 text-center text-xl font-bold tracking-[0.2em] outline-none" />
             <input type="password" required placeholder="New Password" value={password} onChange={(e) => setPassword(e.target.value)} className="rounded-lg border p-2 text-sm outline-none" />
             <input type="password" required placeholder="Confirm New Password" value={verifyPassword} onChange={(e) => setVerifyPassword(e.target.value)} className="rounded-lg border p-2 text-sm outline-none" />
-            <button type="submit" disabled={loading} className="mt-2 w-full rounded-lg bg-[#e31818] py-2.5 font-bold text-white shadow-md hover:bg-red-700 disabled:opacity-50">{loading ? 'Updating...' : 'Update Password'}</button>
+            <button type="submit" disabled={loading} className="mt-2 w-full rounded-lg bg-[#000000] py-2.5 font-bold text-white shadow-md hover:bg-red-700 disabled:opacity-50">{loading ? 'Updating...' : 'Update Password'}</button>
           </form>
         )}
       </div>

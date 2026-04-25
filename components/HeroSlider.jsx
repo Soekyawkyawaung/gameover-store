@@ -46,29 +46,26 @@ const HeroSlider = () => {
 
   if (images.length === 0) return <div className="h-48 w-full animate-pulse bg-gray-200"></div>;
 
+  // Inside HeroSlider.jsx, change the return statement to this:
   return (
-    <div className="relative h-48 w-full overflow-hidden sm:h-64">
-      {/* Images */}
+    <div className="relative h-48 w-full overflow-hidden sm:h-64 bg-gray-900">
       {images.map((imgUrl, index) => (
-        <img
-          key={index}
-          src={imgUrl}
-          alt={`Slider ${index + 1}`}
-          className={`absolute left-0 top-0 h-full w-full object-cover transition-opacity duration-700 ease-in-out ${
-            index === currentIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'
-          }`}
-        />
+        <div 
+          key={index} 
+          className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${index === currentIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+        >
+          {/* Blurred Background Layer */}
+          <img src={imgUrl} alt="bg" className="absolute inset-0 h-full w-full object-cover opacity-40 blur-md scale-110" />
+          
+          {/* Crisp Foreground Layer */}
+          <img src={imgUrl} alt={`Slider ${index + 1}`} className="relative h-full w-full object-contain drop-shadow-2xl" />
+        </div>
       ))}
       
       {/* Slider Dots */}
       <div className="absolute bottom-3 left-0 z-20 flex w-full justify-center gap-2">
         {images.map((_, index) => (
-          <div
-            key={index}
-            className={`h-2 rounded-full transition-all ${
-              index === currentIndex ? 'w-4 bg-[#e31818]' : 'w-2 bg-white/50'
-            }`}
-          />
+          <div key={index} className={`h-2 rounded-full transition-all ${index === currentIndex ? 'w-4 bg-white' : 'w-2 bg-white/50'}`} />
         ))}
       </div>
     </div>
