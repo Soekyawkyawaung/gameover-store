@@ -1,18 +1,17 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, ShoppingCart, Heart, ChevronDown, ChevronUp, PlayCircle, Image as ImageIcon, X } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Heart, ChevronDown, ChevronUp, PlayCircle, Image as ImageIcon, X, Tag } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
-const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNow, onGameClick }) => {
+const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNow, onGameClick, promoPrice }) => {
   const [isAddingCart, setIsAddingCart] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
   
   const isGiftCard = !!game.options;
 
-  // GameOver Account Types
   const [accountType, setAccountType] = useState('Activated Account');
   const [selectedOption, setSelectedOption] = useState(null);
   const [quantity, setQuantity] = useState(1); 
@@ -22,7 +21,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
   const shouldTruncate = game.description && game.description.length > DESCRIPTION_LIMIT;
   const [isPlayingTrailer, setIsPlayingTrailer] = useState(false);
 
-  // GALLERY STATE
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
 
@@ -49,14 +47,13 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
       setSelectedOption(null);
     }
     
-    // Auto-select the account type that has stock if available
     if (!isGiftCard) {
       if (game.activated_stock > 0) {
         setAccountType('Activated Account');
       } else if (game.deactivated_stock > 0) {
         setAccountType('Deactivated Account');
       } else {
-        setAccountType('Activated Account'); // Default if both out of stock
+        setAccountType('Activated Account'); 
       }
     }
   }, [game.id, prefilledOption]);
@@ -92,7 +89,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return toast.error("Please sign in to add to cart");
 
-    // NEW: Double check stock before adding
     if (isOutOfStock) {
       return toast.error("Sorry, this item is out of stock!");
     }
@@ -143,13 +139,47 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
   const isPreOrder = game.collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'));
   const recommendedGames = allGames.filter(g => g.id !== game.id && !g.options).slice(0, 6);
 
-  const currentBasePrice = isGiftCard 
-    ? (selectedOption ? Number(selectedOption.price) : 0)
-    : (accountType === 'Activated Account' ? (game.discount_price || game.price) : (game.deactivated_discount || game.deactivated_price));
-  
-  const totalPrice = currentBasePrice * (isGiftCard ? quantity : 1);
+  // --- FIXED: Pre-Order Text Logic ---
+  let preOrderTag = null;
+  if (isPreOrder) {
+    if (game.release_date) {
+      const daysToRelease = Math.ceil((new Date(game.release_date) - new Date()) / (1000 * 60 * 60 * 24));
+      if (daysToRelease > 0) preOrderTag = "PRE-ORDER";
+      else if (daysToRelease === 0) preOrderTag = "Released Today!";
+      else preOrderTag = "Available Now"; 
+    } else {
+      preOrderTag = "PRE-ORDER";
+    }
+  }
 
-  // --- NEW: STOCK CHECK LOGIC ---
+  let regularPrice = 0;
+  let finalPrice = 0;
+  let isPromoActive = false;
+
+  if (isGiftCard) {
+    finalPrice = selectedOption ? Number(selectedOption.price) : 0;
+  } else {
+    if (accountType === 'Activated Account') {
+        regularPrice = game.discount_price || game.price;
+        if (promoPrice?.activated) {
+            finalPrice = promoPrice.activated;
+            isPromoActive = true;
+        } else {
+            finalPrice = regularPrice;
+        }
+    } else {
+        regularPrice = game.deactivated_discount || game.deactivated_price;
+        if (promoPrice?.deactivated) {
+            finalPrice = promoPrice.deactivated;
+            isPromoActive = true;
+        } else {
+            finalPrice = regularPrice;
+        }
+    }
+  }
+  
+  const totalPrice = finalPrice * (isGiftCard ? quantity : 1);
+
   const isOutOfStock = !isGiftCard && (
     accountType === 'Activated Account' 
       ? (game.activated_stock <= 0) 
@@ -192,6 +222,15 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
       </div>
 
       <div className="p-5">
+        
+        {/* FIXED: Removed the Tag icon from the Pre-Order banner */}
+        {preOrderTag && (
+          <div className="mb-3 bg-orange-100 text-orange-700 px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-2 border border-orange-200">
+            {preOrderTag}
+            {game.release_date && <span className="font-bold opacity-70">( {new Date(game.release_date).toLocaleDateString('en-GB')} )</span>}
+          </div>
+        )}
+
         <h2 className="text-xl font-black text-gray-900 mb-6">{game.name}</h2>
         
         {isGiftCard ? (
@@ -222,22 +261,32 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
             <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Select Account Type</h3>
             <div className="grid grid-cols-2 gap-3">
               
-              {/* ACTIVATED ACCOUNT BUTTON */}
               <button 
                 onClick={() => setAccountType('Activated Account')}
                 disabled={game.activated_stock <= 0}
                 className={`p-3 rounded-xl border-2 text-left transition-all relative overflow-hidden flex flex-col ${accountType === 'Activated Account' ? 'border-black bg-black text-white shadow-md' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'} ${game.activated_stock <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <p className="text-xs font-bold mb-1 opacity-80">Activated</p>
-                <p className={`text-sm font-black ${accountType === 'Activated Account' ? 'text-white' : 'text-black'}`}>
-                  {game.discount_price ? game.discount_price.toLocaleString() : game.price.toLocaleString()} MMK
-                </p>
+                {accountType === 'Activated Account' && isPromoActive ? (
+                    <div className="flex flex-col">
+                        <p className="text-sm font-black text-white">{finalPrice.toLocaleString()} MMK</p>
+                        <p className="text-[10px] font-bold text-white/70 line-through">{regularPrice.toLocaleString()} MMK</p>
+                    </div>
+                ) : (
+                    <div className="flex flex-col">
+                      <p className={`text-sm font-black ${accountType === 'Activated Account' ? 'text-white' : 'text-black'}`}>
+                        {finalPrice.toLocaleString()} MMK
+                      </p>
+                      {game.discount_price && game.price && game.discount_price < game.price && (
+                         <p className={`text-[10px] font-bold line-through ${accountType === 'Activated Account' ? 'text-white/70' : 'text-gray-400'}`}>{game.price.toLocaleString()} MMK</p>
+                      )}
+                    </div>
+                )}
                 <div className={`mt-2 text-[9px] font-black px-2 py-1 rounded inline-block uppercase tracking-wider ${game.activated_stock > 0 ? (accountType === 'Activated Account' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600') : 'bg-red-100 text-red-600'}`}>
                   {game.activated_stock > 0 ? `In Stock` : 'Out of Stock'}
                 </div>
               </button>
 
-              {/* DEACTIVATED ACCOUNT BUTTON */}
               {game.deactivated_price && (
                 <button 
                   onClick={() => setAccountType('Deactivated Account')}
@@ -245,9 +294,21 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
                   className={`p-3 rounded-xl border-2 text-left transition-all relative overflow-hidden flex flex-col ${accountType === 'Deactivated Account' ? 'border-black bg-black text-white shadow-md' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'} ${game.deactivated_stock <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <p className="text-xs font-bold mb-1 opacity-80">Deactivated</p>
-                  <p className={`text-sm font-black ${accountType === 'Deactivated Account' ? 'text-white' : 'text-black'}`}>
-                    {game.deactivated_discount ? game.deactivated_discount.toLocaleString() : game.deactivated_price.toLocaleString()} MMK
-                  </p>
+                  {accountType === 'Deactivated Account' && isPromoActive ? (
+                      <div className="flex flex-col">
+                          <p className="text-sm font-black text-white">{finalPrice.toLocaleString()} MMK</p>
+                          <p className="text-[10px] font-bold text-white/70 line-through">{regularPrice.toLocaleString()} MMK</p>
+                      </div>
+                  ) : (
+                      <div className="flex flex-col">
+                        <p className={`text-sm font-black ${accountType === 'Deactivated Account' ? 'text-white' : 'text-black'}`}>
+                          {finalPrice.toLocaleString()} MMK
+                        </p>
+                        {game.deactivated_discount && game.deactivated_price && game.deactivated_discount < game.deactivated_price && (
+                           <p className={`text-[10px] font-bold line-through ${accountType === 'Deactivated Account' ? 'text-white/70' : 'text-gray-400'}`}>{game.deactivated_price.toLocaleString()} MMK</p>
+                        )}
+                      </div>
+                  )}
                   <div className={`mt-2 text-[9px] font-black px-2 py-1 rounded inline-block uppercase tracking-wider ${game.deactivated_stock > 0 ? (accountType === 'Deactivated Account' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600') : 'bg-red-100 text-red-600'}`}>
                     {game.deactivated_stock > 0 ? `In Stock` : 'Out of Stock'}
                   </div>
@@ -257,7 +318,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
           </div>
         )}
 
-        {/* Tags */}
         {!isGiftCard && (
           <div className="flex flex-wrap gap-2 mb-6">
             {game.size && <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-1 rounded">{game.size}</span>}
@@ -267,7 +327,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
           </div>
         )}
 
-        {/* PRODUCT GALLERY THUMBNAILS (IN PAGE) */}
         {!isGiftCard && productImages.length > 1 && (
             <div className="mb-8 border-t border-gray-100 pt-6 animate-in fade-in duration-500">
                 <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4">Product Gallery</h3>
@@ -289,7 +348,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
             </div>
         )}
 
-        {/* INLINE GAME TRAILER */}
         {!isGiftCard && game.youtube_link && (
           <div className="mb-6 border-t border-gray-100 pt-6">
             <h3 className="text-lg font-bold text-gray-900 mb-3">Official Trailer</h3>
@@ -319,7 +377,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
 
       </div>
 
-      {/* Recommended Games */}
       {recommendedGames.length > 0 && (
         <div className="mb-8 border-t border-gray-100 pt-6">
           <div className="px-4 mb-4">
@@ -333,7 +390,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
                 </div>
                 <div>
                   <h3 className="text-xs font-bold text-gray-900 truncate">{rGame.name}</h3>
-                  <p className="text-xs font-semibold text-black mt-0.5">{rGame.discount_price || rGame.price} MMK</p>
+                  <p className="text-xs font-semibold text-black mt-0.5">{(rGame.discount_price || rGame.price).toLocaleString()} MMK</p>
                 </div>
               </div>
             ))}
@@ -341,26 +398,28 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
         </div>
       )}
 
-      {/* Bottom Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 p-4 z-40">
-        <div className="flex justify-between items-center mb-3 px-1">
+      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 p-4 flex flex-col gap-3 z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
+        <div className="flex justify-between items-center mb-1 px-1">
           <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total {isGiftCard && `(x${quantity})`}</span>
-          <span className="text-lg font-black text-black">{totalPrice.toLocaleString()} MMK</span>
+          <div className="flex flex-col items-end">
+            <span className={`text-lg font-black ${isPromoActive ? 'text-red-600' : 'text-black'}`}>{totalPrice.toLocaleString()} MMK</span>
+            {isPromoActive && regularPrice && (
+               <span className="text-[10px] font-bold text-gray-400 line-through">{(regularPrice * (isGiftCard ? quantity : 1)).toLocaleString()} MMK</span>
+            )}
+          </div>
         </div>
         
         <div className="flex gap-3">
-          {/* Disable Add to Cart if Out of Stock */}
           <button onClick={handleAddToCart} disabled={isAddingCart || (isGiftCard && !selectedOption) || isOutOfStock} className="flex items-center justify-center w-14 rounded-xl bg-gray-100 text-gray-900 font-bold active:scale-95 transition-transform disabled:opacity-50">
             <ShoppingCart className="h-5 w-5" />
           </button>
-          {/* Change Text and Disable Buy Now if Out of Stock */}
-          <button onClick={handleBuyNow} disabled={(isGiftCard && !selectedOption) || isOutOfStock} className={`flex-1 items-center justify-center rounded-xl text-white font-black py-3.5 shadow-lg active:scale-95 transition-all ${isOutOfStock ? 'bg-gray-300 shadow-none cursor-not-allowed' : 'bg-black shadow-gray-500/30 hover:bg-gray-800'}`}>
-            {isOutOfStock ? 'OUT OF STOCK' : (isPreOrder ? 'PRE-ORDER' : 'BUY NOW')}
+          {/* FIXED: PRE-ORDER button text displays without the "In X Days" */}
+          <button onClick={handleBuyNow} disabled={(isGiftCard && !selectedOption) || isOutOfStock} className={`flex-1 items-center justify-center rounded-xl text-white font-black py-3.5 shadow-lg active:scale-95 transition-transform hover:bg-gray-800 disabled:opacity-50 ${isOutOfStock ? 'bg-gray-300 shadow-none cursor-not-allowed text-gray-500' : 'bg-black shadow-gray-500/30'}`}>
+            {isOutOfStock ? 'OUT OF STOCK' : (preOrderTag ? "PRE-ORDER" : "BUY NOW")}
           </button>
         </div>
       </div>
 
-      {/* PREMIUM FULL SCREEN LIGHTBOX */}
       {isGalleryOpen && (
         <div className="fixed inset-0 z-[999] bg-[#121212] flex flex-col animate-in fade-in duration-200">
           

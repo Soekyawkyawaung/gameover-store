@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Gamepad2, Image as ImageIcon, PlusCircle, Save, LogOut, Loader2, Tags, Trash2, Edit, ShoppingBag, Search, Filter, CreditCard, Plus, X, Menu, UploadCloud } from 'lucide-react';
+import { Gamepad2, Image as ImageIcon, PlusCircle, Save, LogOut, Loader2, Tags, Trash2, Edit, ShoppingBag, Search, Filter, CreditCard, Plus, X, Menu, UploadCloud, Tag, CalendarClock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
@@ -25,12 +25,12 @@ const AdminPanel = ({ onBackToStore }) => {
   const [price, setPrice] = useState('');
   const [discountPrice, setDiscountPrice] = useState('');
   
-  // GameOver Account Fields + NEW STOCK FIELDS
   const [deactivatedPrice, setDeactivatedPrice] = useState('');
   const [deactivatedDiscount, setDeactivatedDiscount] = useState('');
   const [activatedStock, setActivatedStock] = useState('10');
   const [deactivatedStock, setDeactivatedStock] = useState('10');
-  
+  const [releaseDate, setReleaseDate] = useState('');
+
   const [youtubeLink, setYoutubeLink] = useState('');
   const [description, setDescription] = useState('');
   const [gameSize, setGameSize] = useState('');
@@ -64,10 +64,29 @@ const AdminPanel = ({ onBackToStore }) => {
   const [giftCoverFile, setGiftCoverFile] = useState(null);
   const [isSavingGift, setIsSavingGift] = useState(false);
 
+  // --- PROMOTION STATES ---
+  const [promotionsList, setPromotionsList] = useState([]);
+  const [isSavingPromo, setIsSavingPromo] = useState(false);
+  const [showPromoForm, setShowPromoForm] = useState(false);
+  
+  const [promoGameIds, setPromoGameIds] = useState([]); 
+  const [promoType, setPromoType] = useState('only_photo');
+  const [promoFile, setPromoFile] = useState(null);
+  const [promoPreview, setPromoPreview] = useState(null);
+  const [promoText, setPromoText] = useState('');
+  
+  const [promoPrices, setPromoPrices] = useState({}); 
+  
+  const [startDay, setStartDay] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endDay, setEndDay] = useState('');
+  const [endTime, setEndTime] = useState('');
+
   useEffect(() => {
     fetchGames();
     fetchOrders();
     fetchGiftCards();
+    fetchPromotions();
   }, []);
 
   useEffect(() => {
@@ -94,6 +113,11 @@ const AdminPanel = ({ onBackToStore }) => {
   const fetchOrders = async () => {
     const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
     if (data) setOrdersList(data);
+  };
+
+  const fetchPromotions = async () => {
+    const { data } = await supabase.from('promotions').select('*, games(name)').order('start_time', { ascending: false });
+    if (data) setPromotionsList(data);
   };
 
   const pendingOrdersCount = ordersList.filter(order => order.status === 'pending').length;
@@ -195,8 +219,9 @@ const AdminPanel = ({ onBackToStore }) => {
         discount_price: discountPrice ? parseFloat(discountPrice) : null,
         deactivated_price: deactivatedPrice ? parseFloat(deactivatedPrice) : null,
         deactivated_discount: deactivatedDiscount ? parseFloat(deactivatedDiscount) : null,
-        activated_stock: parseInt(activatedStock) || 0, // NEW STOCK
-        deactivated_stock: parseInt(deactivatedStock) || 0, // NEW STOCK
+        activated_stock: parseInt(activatedStock) || 0,
+        deactivated_stock: parseInt(deactivatedStock) || 0,
+        release_date: releaseDate || null,
         size: gameSize,
         youtube_link: youtubeLink,
         description: description,
@@ -234,36 +259,40 @@ const AdminPanel = ({ onBackToStore }) => {
 
   const handleEditClick = (game) => {
     setEditGameId(game.id);
-    setGameName(game.name);
-    setPrice(game.price.toString());
-    setDiscountPrice(game.discount_price ? game.discount_price.toString() : '');
+    setGameName(game.name || '');
+    setPrice(game.price?.toString() || '');
+    setDiscountPrice(game.discount_price?.toString() || '');
     
-    setDeactivatedPrice(game.deactivated_price ? game.deactivated_price.toString() : '');
-    setDeactivatedDiscount(game.deactivated_discount ? game.deactivated_discount.toString() : '');
-    setActivatedStock(game.activated_stock !== null ? game.activated_stock.toString() : '10');
-    setDeactivatedStock(game.deactivated_stock !== null ? game.deactivated_stock.toString() : '10');
+    setDeactivatedPrice(game.deactivated_price?.toString() || '');
+    setDeactivatedDiscount(game.deactivated_discount?.toString() || '');
+    
+    // Safely load stock and fallback to '10' if the column is empty
+    setActivatedStock(game.activated_stock?.toString() || '10');
+    setDeactivatedStock(game.deactivated_stock?.toString() || '10');
+    setReleaseDate(game.release_date || '');
 
     setGameSize(game.size || '');
     setYoutubeLink(game.youtube_link || '');
     setDescription(game.description || '');
     
-    const textCollections = game.collections?.filter(tag => tag !== "PS5 Games" && tag !== "PS4 Games").join(', ') || '';
-    setCollections(textCollections);
-    setIsPS5(game.collections?.includes("PS5 Games") || false);
-    setIsPS4(game.collections?.includes("PS4 Games") || false);
+    // Safely handle collections if they aren't formatted correctly
+    const safeCollections = Array.isArray(game.collections) ? game.collections : [];
+    setCollections(safeCollections.filter(tag => tag !== "PS5 Games" && tag !== "PS4 Games").join(', '));
+    setIsPS5(safeCollections.includes("PS5 Games"));
+    setIsPS4(safeCollections.includes("PS4 Games"));
 
     setCoverFile(null); 
     setCoverUrlInput(''); 
     setCoverPreview(game.cover_image); 
 
-    const existingSs = game.screenshots || [];
+    // Safely map existing screenshots into the 6 slots
+    const existingSs = Array.isArray(game.screenshots) ? game.screenshots : [];
     setExistingScreenshots(existingSs);
-    setScreenshotInputs(prev => prev.map((item, i) => {
-      if (existingSs[i]) {
-        return { file: null, url: existingSs[i], preview: existingSs[i] };
-      }
-      return { file: null, url: '', preview: null };
-    }));
+    setScreenshotInputs(Array.from({ length: 6 }, (_, i) => ({
+      file: null, 
+      url: existingSs[i] || '', 
+      preview: existingSs[i] || null
+    })));
 
     setShowGameForm(true);
   };
@@ -271,7 +300,7 @@ const AdminPanel = ({ onBackToStore }) => {
   const resetForm = () => {
     setEditGameId(null); setGameName(''); setPrice(''); setDiscountPrice(''); 
     setDeactivatedPrice(''); setDeactivatedDiscount(''); 
-    setActivatedStock('10'); setDeactivatedStock('10');
+    setActivatedStock('10'); setDeactivatedStock('10'); setReleaseDate('');
     setYoutubeLink(''); setDescription(''); setGameSize(''); setCollections(''); 
     setIsPS5(false); setIsPS4(false); 
     setCoverFile(null); setCoverUrlInput(''); setCoverPreview(null); 
@@ -379,6 +408,80 @@ const AdminPanel = ({ onBackToStore }) => {
     } catch (error) { toast.error(error.message); } finally { setIsUploadingSlider(false); }
   };
 
+  const handleSavePromo = async (e) => {
+    e.preventDefault();
+    setIsSavingPromo(true);
+    try {
+      if (promoGameIds.length === 0) throw new Error("Please select at least one game to promote!");
+      
+      if (promoGameIds.some(id => !promoPrices[id]?.activated || promoPrices[id].activated === '')) {
+        throw new Error("Please enter an Activated discount price for every selected game.");
+      }
+
+      if (!startDay || !startTime || !endDay || !endTime) throw new Error("Time range is required!");
+      
+      const startTimeStamp = `${startDay}T${startTime}:00`;
+      const endTimeStamp = `${endDay}T${endTime}:00`;
+
+      if (new Date(startTimeStamp) >= new Date(endTimeStamp)) throw new Error("End time must be after start time.");
+
+      let promoImageUrl = null;
+      if (promoType !== 'text_countdown') {
+        if (promoFile) {
+          const fileExt = promoFile.name.split('.').pop();
+          const fileName = `promo-${Date.now()}.${fileExt}`;
+          const { error: uploadError } = await supabase.storage.from('promo_images').upload(fileName, promoFile);
+          if (uploadError) throw uploadError;
+          const { data: { publicUrl } } = supabase.storage.from('promo_images').getPublicUrl(fileName);
+          promoImageUrl = publicUrl;
+        } else if (promoPreview && !promoFile) {
+           promoImageUrl = promoPreview; 
+        } else {
+          throw new Error("Promo photo is required!");
+        }
+      }
+
+      const finalStartTime = new Date(startTimeStamp).toISOString();
+      const finalEndTime = new Date(endTimeStamp).toISOString();
+
+      const promoDataArray = promoGameIds.map(id => ({
+        game_id: id,
+        promo_type: promoType,
+        discount_price: parseFloat(promoPrices[id]?.activated) || 0,
+        deactivated_discount_price: promoPrices[id]?.deactivated ? parseFloat(promoPrices[id].deactivated) : null,
+        start_time: finalStartTime,
+        end_time: finalEndTime,
+        promo_image_url: promoImageUrl,
+        promo_text: promoType === 'text_countdown' ? promoText : null
+      }));
+
+      const { error } = await supabase.from('promotions').insert(promoDataArray);
+      if (error) throw error;
+
+      toast.success(`Discount Promo Scheduled for ${promoGameIds.length} game(s)!`);
+      setShowPromoForm(false);
+      resetPromoForm();
+      fetchPromotions();
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setIsSavingPromo(false);
+    }
+  };
+
+  const resetPromoForm = () => {
+    setPromoGameIds([]); setPromoType('only_photo'); setPromoFile(null); 
+    setPromoPreview(null); setPromoText(''); setPromoPrices({}); 
+    setStartDay(''); setStartTime(''); setEndDay(''); setEndTime('');
+  };
+
+  const handleDeletePromo = async (id) => {
+    if (!window.confirm("Delete this discount promo? Price will instantly revert to regular on store.")) return;
+    await supabase.from('promotions').delete().eq('id', id);
+    toast.success("Promo deleted.");
+    fetchPromotions();
+  };
+
   return (
     <div className="flex h-screen w-full bg-gray-50 font-sans relative overflow-hidden">
       
@@ -396,23 +499,19 @@ const AdminPanel = ({ onBackToStore }) => {
         </div>
         <nav className="flex-1 py-6 px-3 flex flex-col gap-2 overflow-y-auto">
           
-          <button 
-            onClick={() => { setActiveTab('orders'); setIsSidebarOpen(false); }} 
-            className={`flex w-full items-center justify-between px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${activeTab === 'orders' ? 'bg-black text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
-          >
-            <div className="flex items-center gap-3">
-              <ShoppingBag className="h-5 w-5" /> Manage Orders
-            </div>
-            {pendingOrdersCount > 0 && (
-              <span className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold shadow-sm ${activeTab === 'orders' ? 'bg-white text-black' : 'bg-black text-white'}`}>
-                {pendingOrdersCount}
-              </span>
-            )}
+          <button onClick={() => { setActiveTab('orders'); setIsSidebarOpen(false); }} className={`flex w-full items-center justify-between px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${activeTab === 'orders' ? 'bg-black text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
+            <div className="flex items-center gap-3"><ShoppingBag className="h-5 w-5" /> Manage Orders</div>
+            {pendingOrdersCount > 0 && <span className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold shadow-sm ${activeTab === 'orders' ? 'bg-white text-black' : 'bg-black text-white'}`}>{pendingOrdersCount}</span>}
           </button>
 
           <button onClick={() => { setActiveTab('games'); setShowGameForm(false); setIsSidebarOpen(false); }} className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${activeTab === 'games' ? 'bg-black text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
             <Gamepad2 className="h-5 w-5" /> Manage Games
           </button>
+
+          <button onClick={() => { setActiveTab('discount'); setShowPromoForm(false); setIsSidebarOpen(false); }} className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${activeTab === 'discount' ? 'bg-black text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
+            <Tag className="h-5 w-5" /> Manage Discount (Promo)
+          </button>
+
           <button onClick={() => { setActiveTab('giftcards'); setShowGiftForm(false); setIsSidebarOpen(false); }} className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${activeTab === 'giftcards' ? 'bg-black text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
             <CreditCard className="h-5 w-5" /> Manage Gift Cards
           </button>
@@ -438,6 +537,234 @@ const AdminPanel = ({ onBackToStore }) => {
 
         <main className="flex-1 overflow-y-auto p-4 md:p-10">
           
+          {/* --- MANAGE DISCOUNT TAB --- */}
+          {activeTab === 'discount' && !showPromoForm && (
+            <div className="max-w-7xl animate-in fade-in duration-300">
+              <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Discount Promotions</h2>
+                  <p className="text-gray-500 mt-1 text-sm md:text-base">Automatically return to regular price when promo ends.</p>
+                </div>
+                <button onClick={() => setShowPromoForm(true)} className="w-full md:w-auto flex justify-center items-center gap-2 bg-black text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-800 active:scale-95 transition-all">
+                  <Tag className="h-5 w-5" /> Add New Promo
+                </button>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto">
+                <table className="w-full text-left border-collapse whitespace-nowrap">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
+                      <th className="p-4 font-semibold">Game</th>
+                      <th className="p-4 font-semibold">Promo Type</th>
+                      <th className="p-4 font-semibold">Promo Price</th>
+                      <th className="p-4 font-semibold">Status</th>
+                      <th className="p-4 font-semibold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {promotionsList.length === 0 ? (
+                      <tr><td colSpan="5" className="p-10 text-center text-gray-500 font-bold">No active or scheduled promos.</td></tr>
+                    ) : (
+                      promotionsList.map(promo => {
+                        const now = new Date();
+                        const start = new Date(promo.start_time);
+                        const end = new Date(promo.end_time);
+                        let status = "Scheduled";
+                        let statusColor = "bg-blue-100 text-blue-700";
+                        if (now >= start && now <= end) { status = "Active"; statusColor = "bg-green-100 text-green-700"; }
+                        if (now > end) { status = "Ended"; statusColor = "bg-gray-100 text-gray-500"; }
+
+                        return (
+                          <tr key={promo.id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="p-4 font-bold text-gray-900">{promo.games?.name || 'N/A'}</td>
+                            <td className="p-4">
+  <span className="text-xs font-black text-gray-900 uppercase block">
+    {promo.promo_type.replace('_', ' ')}
+  </span>
+  {promo.promo_text && (
+    <span className="text-[10px] font-bold text-blue-600 mt-1 block">
+      "{promo.promo_text}"
+    </span>
+  )}
+</td>
+                            <td className="p-4">
+                              <span className="font-bold text-green-600 block">Act: {promo.discount_price.toLocaleString()}</span>
+                              {promo.deactivated_discount_price && <span className="font-bold text-orange-600 block text-xs">Deact: {promo.deactivated_discount_price.toLocaleString()}</span>}
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2 py-1 rounded text-xs font-bold ${statusColor}`}>{status}</span>
+                              <div className="text-[10px] text-gray-400 mt-1">{start.toLocaleString('en-GB')} - {end.toLocaleString('en-GB')}</div>
+                            </td>
+                            <td className="p-4 text-right">
+                              <button onClick={() => handleDeletePromo(promo.id)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100"><Trash2 className="h-4 w-4"/></button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* --- ADD PROMO FORM --- */}
+          {activeTab === 'discount' && showPromoForm && (
+            <div className="max-w-4xl animate-in fade-in duration-300">
+              <button onClick={() => setShowPromoForm(false)} className="mb-6 text-sm font-bold text-blue-600 hover:underline">← Back to List</button>
+              <form onSubmit={handleSavePromo} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 md:p-8">
+                <h3 className="flex items-center gap-2 text-lg font-bold text-gray-800 mb-6 border-b border-gray-100 pb-4">
+                  <Tag className="h-5 w-5 text-black" /> Add Discount Promotion (Home Screen Block)
+                </h3>
+                
+                <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+                  
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">1. Choose Game(s)</label>
+                    <select 
+                      value="" 
+                      onChange={(e)=>{
+                        if(e.target.value && !promoGameIds.includes(e.target.value)) {
+                          setPromoGameIds([...promoGameIds, e.target.value]);
+                        }
+                      }} 
+                      className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black font-semibold text-sm cursor-pointer bg-white"
+                    >
+                      <option value="">-- Click to add games to this promotion --</option>
+                      {gamesList.filter(g => !giftCardsList.some(gc => gc.id === g.id)).map(g => (
+                        <option key={g.id} value={g.id}>{g.name}</option>
+                      ))}
+                    </select>
+
+                    {promoGameIds.length > 0 && (
+                      <div className="flex flex-col gap-2 mt-4 p-4 bg-gray-50 border border-gray-200 rounded-xl shadow-inner">
+                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Set Specific Discount Prices:</span>
+                        {promoGameIds.map(id => {
+                          const game = gamesList.find(g => g.id === id);
+                          return (
+                            <div key={id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-gray-200 shadow-sm px-4 py-3 rounded-xl animate-in zoom-in duration-200">
+                              <div className="flex flex-col flex-1">
+                                <span className="text-sm font-bold text-gray-900 truncate">{game?.name}</span>
+                                <div className="text-xs text-gray-500 font-semibold mt-0.5 flex gap-2">
+                                  <span>Act Reg: {game?.price}</span>
+                                  {game?.deactivated_price && <span>| Deact Reg: {game?.deactivated_price}</span>}
+                                </div>
+                              </div>
+                              <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
+                                <input 
+                                  type="number" 
+                                  required 
+                                  placeholder="Act. Promo Price"
+                                  value={promoPrices[id]?.activated || ''}
+                                  onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], activated: e.target.value}})}
+                                  className="w-full sm:w-36 rounded-lg border border-gray-300 px-3 py-2 text-sm font-black text-green-600 outline-none focus:border-black bg-white"
+                                />
+                                {game?.deactivated_price && (
+                                  <input 
+                                    type="number" 
+                                    placeholder="Deact. Promo Price"
+                                    value={promoPrices[id]?.deactivated || ''}
+                                    onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], deactivated: e.target.value}})}
+                                    className="w-full sm:w-36 rounded-lg border border-gray-300 px-3 py-2 text-sm font-black text-orange-500 outline-none focus:border-black bg-white"
+                                  />
+                                )}
+                                <button 
+                                  type="button" 
+                                  onClick={() => {
+                                    setPromoGameIds(promoGameIds.filter(gid => gid !== id));
+                                    const newPrices = {...promoPrices};
+                                    delete newPrices[id];
+                                    setPromoPrices(newPrices);
+                                  }} 
+                                  className="text-gray-400 hover:text-red-600 bg-gray-50 hover:bg-red-50 p-2.5 rounded-lg transition-colors border border-gray-100 w-full sm:w-auto flex justify-center"
+                                >
+                                  <X className="w-4 h-4"/>
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="md:col-span-2 mt-2">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">2. Promotion Banner Type</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[
+                        {value: 'only_photo', label: 'Only Photo'},
+                        {value: 'photo_countdown', label: 'Photo with Countdown'},
+                        {value: 'text_countdown', label: 'Text with Countdown'},
+                      ].map(type => (
+                        <label key={type.value} className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${promoType === type.value ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-50 border-gray-200 hover:border-gray-300 text-gray-700'}`}>
+                          <input type="radio" checked={promoType === type.value} onChange={()=>setPromoType(type.value)} className="form-radio h-5 w-5 text-gray-900 focus:ring-0 border-gray-300" />
+                          <span className="text-sm font-bold">{type.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Photo Section: Shows only if NOT Text Countdown */}
+                  {promoType !== 'text_countdown' && (
+                    <div className="md:col-span-2 p-4 border border-gray-200 rounded-xl bg-gray-50 animate-in fade-in duration-300">
+                      <label className="block text-sm font-bold text-gray-700 mb-2">3. Promotion Photo (Visible on Home)</label>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                            <p className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Upload File</p>
+                            <input type="file" accept="image/*" onChange={(e)=>{ if(e.target.files[0]){ setPromoFile(e.target.files[0]); setPromoPreview(URL.createObjectURL(e.target.files[0])); }}} className="w-full text-xs text-gray-500 file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:bg-gray-100 file:text-black hover:file:bg-gray-200 cursor-pointer bg-white" />
+                         </div>
+                         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col justify-center">
+                            <p className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Or Paste URL</p>
+                            <input type="url" value={promoFile ? '' : (promoPreview || '')} onChange={(e) => { setPromoPreview(e.target.value); setPromoFile(null); }} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black bg-white" placeholder="https://..." />
+                         </div>
+                      </div>
+
+                      {promoPreview && <img src={promoPreview} className="h-40 md:h-60 rounded-xl object-contain bg-white border border-gray-200 p-2 shadow-sm" />}
+                    </div>
+                  )}
+
+                  {/* Text Section: Shows only if Text Countdown is selected */}
+                  {promoType === 'text_countdown' && (
+                    <div className="md:col-span-2 animate-in fade-in duration-300">
+                      <label className="block text-sm font-bold text-gray-700 mb-2">3. Promotion Text (Visible on Home)</label>
+                      <input type="text" required value={promoText} onChange={(e)=>setPromoText(e.target.value)} placeholder="e.g. FLASH SALE! - PS4 GOW RAGNAROK" className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-black bg-white" />
+                    </div>
+                  )}
+
+                  <div className="p-4 border border-dashed border-gray-300 rounded-xl bg-gray-50 shadow-sm md:col-span-2 mt-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><Tags className="h-4 w-4 text-green-600"/> Promo Start Day & Time</label>
+                        <div className="flex gap-2">
+                          <input type="date" required value={startDay} onChange={(e)=>setStartDay(e.target.value)} className="flex-1 rounded-xl border border-gray-300 px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-black bg-white" />
+                          <input type="time" required value={startTime} onChange={(e)=>setStartTime(e.target.value)} className="w-36 rounded-xl border border-gray-300 px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-black bg-white" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><CalendarClock className="h-4 w-4 text-red-600"/> Promo End Day & Time</label>
+                        <div className="flex gap-2">
+                          <input type="date" required value={endDay} onChange={(e)=>setEndDay(e.target.value)} className="flex-1 rounded-xl border border-gray-300 px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-black bg-white" />
+                          <input type="time" required value={endTime} onChange={(e)=>setEndTime(e.target.value)} className="w-36 rounded-xl border border-gray-300 px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-black bg-white" />
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2 flex justify-end pt-6">
+                    <button type="submit" disabled={isSavingPromo} className="w-full md:w-auto flex justify-center items-center gap-2 rounded-xl bg-black px-8 py-3.5 font-bold text-white hover:bg-gray-800 active:scale-95 disabled:opacity-50 transition-all shadow-lg">
+                      {isSavingPromo ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />} Activate Discount Promo
+                    </button>
+                  </div>
+
+                </div>
+              </form>
+            </div>
+          )}
+
           {/* --- ORDERS TAB --- */}
           {activeTab === 'orders' && !selectedOrder && (
             <div className="max-w-7xl animate-in fade-in duration-300">
@@ -447,6 +774,19 @@ const AdminPanel = ({ onBackToStore }) => {
                 <div className="flex flex-1 items-center rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
                   <Search className="h-5 w-5 text-gray-400" />
                   <input type="text" placeholder="Search order no, customer, or game..." value={orderSearch} onChange={(e) => setOrderSearch(e.target.value)} className="ml-2 w-full bg-transparent text-sm outline-none text-gray-900" />
+                </div>
+                <div className="flex flex-wrap md:flex-nowrap items-center gap-3 w-full md:w-auto">
+                  <Filter className="h-5 w-5 text-gray-400 hidden md:block" />
+                  <select value={orderMonth} onChange={(e) => setOrderMonth(e.target.value)} className="flex-1 md:flex-none rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none">
+                    <option value="">All Months</option>
+                    {[...Array(12)].map((_, i) => <option key={i+1} value={i+1}>{new Date(0, i).toLocaleString('default', { month: 'short' })}</option>)}
+                  </select>
+                  <select value={orderYear} onChange={(e) => setOrderYear(e.target.value)} className="flex-1 md:flex-none rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none">
+                    <option value="">All Years</option>
+                    <option value="2026">2026</option>
+                    <option value="2027">2027</option>
+                    <option value="2028">2028</option>
+                  </select>
                 </div>
               </div>
 
@@ -491,6 +831,7 @@ const AdminPanel = ({ onBackToStore }) => {
             </div>
           )}
 
+          {/* ORDER REVIEW MODAL */}
           {activeTab === 'orders' && selectedOrder && (
             <div className="max-w-4xl animate-in fade-in duration-300">
               <button onClick={() => setSelectedOrder(null)} className="mb-6 text-sm font-bold text-blue-600 hover:underline">← Back to Orders</button>
@@ -541,7 +882,7 @@ const AdminPanel = ({ onBackToStore }) => {
                   <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Store Catalog</h2>
                   <p className="text-gray-500 mt-1 text-sm md:text-base">Manage your games, prices, and categories.</p>
                 </div>
-                <button onClick={() => setShowGameForm(true)} className="w-full md:w-auto flex justify-center items-center gap-2 bg-black text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-800 active:scale-95 transition-all">
+                <button onClick={() => { resetForm(); setShowGameForm(true); }} className="w-full md:w-auto flex justify-center items-center gap-2 bg-black text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-800 active:scale-95 transition-all">
                   <PlusCircle className="h-5 w-5" /> Add New Game
                 </button>
               </div>
@@ -680,6 +1021,7 @@ const AdminPanel = ({ onBackToStore }) => {
                     )}
                   </div>
 
+                  {/* GAME SCREENSHOTS SECTION */}
                   <div className="col-span-1 md:col-span-2 flex flex-col gap-4 p-5 border border-dashed border-gray-200 rounded-2xl bg-gray-50/50 mt-4">
                     <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-4 mb-2">
                       <h4 className="text-base font-bold text-gray-900 flex items-center gap-2">
@@ -735,6 +1077,11 @@ const AdminPanel = ({ onBackToStore }) => {
                     <label className="block text-sm font-bold text-gray-700 mb-2">Game Name</label>
                     <input type="text" required value={gameName} onChange={(e) => setGameName(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 outline-none focus:border-black transition-colors" placeholder="e.g. Spiderman 2" />
                   </div>
+
+                  <div className="col-span-1 md:col-span-2">
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Release Date <span className="text-gray-400">(Optional - Enables Pre-Order Countdown)</span></label>
+                    <input type="date" value={releaseDate} onChange={(e) => setReleaseDate(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black transition-colors bg-white" />
+                  </div>
                   
                   <div className="col-span-1 md:col-span-2">
                     <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><Tags className="h-4 w-4" /> Platform Selection</label>
@@ -766,33 +1113,27 @@ const AdminPanel = ({ onBackToStore }) => {
                     )}
                   </div>
                   
-                  {/* --- PRICING AND STOCK --- */}
                   <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    
-                    {/* Activated Box */}
                     <div className="bg-green-50 p-4 rounded-xl border border-green-100">
                       <h4 className="font-black text-green-800 mb-4 uppercase tracking-widest text-xs">Activated Account</h4>
                       <label className="block text-sm font-bold text-gray-700 mb-2">Regular Price</label>
-                      <input type="number" required value={price} onChange={(e) => setPrice(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 mb-4 outline-none focus:border-black" />
+                      <input type="number" required value={price} onChange={(e) => setPrice(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 mb-4 outline-none focus:border-black bg-white" />
                       <label className="block text-sm font-bold text-gray-700 mb-2">Discount Price (Optional)</label>
-                      <input type="number" value={discountPrice} onChange={(e) => setDiscountPrice(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 mb-4 outline-none focus:border-black" />
+                      <input type="number" value={discountPrice} onChange={(e) => setDiscountPrice(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 mb-4 outline-none focus:border-black bg-white" />
                       
-                      {/* NEW: Activated Stock */}
                       <label className="block text-sm font-bold text-gray-700 mb-2 border-t border-green-200 pt-4">Activated Stock Quantity</label>
-                      <input type="number" required value={activatedStock} onChange={(e) => setActivatedStock(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black" placeholder="e.g. 10" />
+                      <input type="number" required value={activatedStock} onChange={(e) => setActivatedStock(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black bg-white" placeholder="e.g. 10" />
                     </div>
 
-                    {/* Deactivated Box */}
                     <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
                       <h4 className="font-black text-orange-800 mb-4 uppercase tracking-widest text-xs">Deactivated Account (Optional)</h4>
                       <label className="block text-sm font-bold text-gray-700 mb-2">Regular Price</label>
-                      <input type="number" value={deactivatedPrice} onChange={(e) => setDeactivatedPrice(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 mb-4 outline-none focus:border-black" />
+                      <input type="number" value={deactivatedPrice} onChange={(e) => setDeactivatedPrice(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 mb-4 outline-none focus:border-black bg-white" />
                       <label className="block text-sm font-bold text-gray-700 mb-2">Discount Price (Optional)</label>
-                      <input type="number" value={deactivatedDiscount} onChange={(e) => setDeactivatedDiscount(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 mb-4 outline-none focus:border-black" />
+                      <input type="number" value={deactivatedDiscount} onChange={(e) => setDeactivatedDiscount(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 mb-4 outline-none focus:border-black bg-white" />
                       
-                      {/* NEW: Deactivated Stock */}
                       <label className="block text-sm font-bold text-gray-700 mb-2 border-t border-orange-200 pt-4">Deactivated Stock Quantity</label>
-                      <input type="number" value={deactivatedStock} onChange={(e) => setDeactivatedStock(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black" placeholder="e.g. 5" />
+                      <input type="number" value={deactivatedStock} onChange={(e) => setDeactivatedStock(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black bg-white" placeholder="e.g. 5" />
                     </div>
                   </div>
                   

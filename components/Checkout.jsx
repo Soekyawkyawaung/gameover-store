@@ -5,7 +5,7 @@ import { UploadCloud, Loader2, CheckCircle, Receipt, Check, FileText, X } from '
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
-const Checkout = () => {
+const Checkout = ({ promotedGamesIds = {} }) => {
   const [cartItems, setCartItems] = useState([]);
   const [totalPrice, setTotalPrice] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -17,12 +17,40 @@ const Checkout = () => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [generatedOrderNo, setGeneratedOrderNo] = useState('');
   
-  // NEW: Terms and Conditions Modal State
+  // Terms and Conditions Modal State
   const [showTermsModal, setShowTermsModal] = useState(false);
 
   useEffect(() => {
     fetchCartData();
   }, []);
+
+  // PROMO PRICING LOGIC
+  const getDerivedPrice = (item) => {
+    const isGift = !!item.gift_cards;
+    const targetItem = isGift ? item.gift_cards : item.games;
+    if (!targetItem) return { price: 0, isPromo: false };
+
+    if (isGift) {
+      return { price: item.selected_option?.price || 0, isPromo: false };
+    }
+
+    const promo = promotedGamesIds[targetItem.id];
+    const isActivated = item.account_type === 'Activated Account';
+    
+    const regularPrice = isActivated 
+      ? (targetItem.discount_price || targetItem.price)
+      : (targetItem.deactivated_discount || targetItem.deactivated_price);
+
+    if (promo && ((isActivated && promo.activated) || (!isActivated && promo.deactivated))) {
+      return {
+        price: isActivated ? promo.activated : promo.deactivated,
+        regularPrice: regularPrice,
+        isPromo: true
+      };
+    }
+
+    return { price: regularPrice, isPromo: false };
+  };
 
   const fetchCartData = async () => {
     setIsLoading(true);
@@ -37,18 +65,8 @@ const Checkout = () => {
         setCartItems(data);
         
         const total = data.reduce((sum, item) => {
-          const isGift = !!item.gift_cards;
-          let priceToUse = 0;
-          
-          if (isGift && item.selected_option) {
-            priceToUse = Number(item.selected_option.price);
-          } else if (item.games) {
-            priceToUse = item.account_type === 'Deactivated Account' 
-              ? (item.games.deactivated_discount || item.games.deactivated_price)
-              : (item.games.discount_price || item.games.price);
-          }
-          
-          return sum + (Number(priceToUse) * (item.quantity || 1));
+          const dp = getDerivedPrice(item);
+          return sum + (Number(dp.price) * (item.quantity || 1));
         }, 0);
         
         setTotalPrice(total);
@@ -64,7 +82,7 @@ const Checkout = () => {
     }
   };
 
-  // --- NEW: Intercept Confirm Click to Check for Games & Show T&C ---
+  // Intercept Confirm Click to Check for Games & Show T&C
   const handleConfirmClick = () => {
     if (!screenshotFile) {
       toast.error("Please upload your payment screenshot first!");
@@ -80,13 +98,13 @@ const Checkout = () => {
     }
   };
 
-  // --- Actual Order Processing Logic ---
+  // Actual Order Processing Logic
   const processOrder = async () => {
     setIsSubmitting(true);
     setShowTermsModal(false);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const orderNo = 'GO' + Math.floor(100000 + Math.random() * 900000); // Back to GO
+      const orderNo = 'GO' + Math.floor(100000 + Math.random() * 900000); 
       setGeneratedOrderNo(orderNo);
 
       const fileExt = screenshotFile.name.split('.').pop();
@@ -103,18 +121,13 @@ const Checkout = () => {
         items: cartItems.map(item => {
           const isGift = !!item.gift_cards;
           const targetItem = isGift ? item.gift_cards : item.games;
-          
-          let priceToUse = 0;
-          if (isGift) priceToUse = item.selected_option.price;
-          else priceToUse = item.account_type === 'Deactivated Account' 
-            ? (targetItem.deactivated_discount || targetItem.deactivated_price) 
-            : (targetItem.discount_price || targetItem.price);
+          const dp = getDerivedPrice(item);
 
           return { 
             id: targetItem.id,
             name: targetItem.name, 
             account_type: isGift ? item.selected_option.label : item.account_type,
-            price: priceToUse,
+            price: dp.price, // Save the actual charged price (Promo or Regular)
             quantity: item.quantity || 1,
             cover_image: targetItem.cover_image || targetItem.image 
           };
@@ -171,13 +184,8 @@ const Checkout = () => {
             
             if (!targetItem) return null; 
 
-            let itemPrice = 0;
-            if (isGift) itemPrice = item.selected_option.price;
-            else itemPrice = item.account_type === 'Deactivated Account' 
-              ? (targetItem.deactivated_discount || targetItem.deactivated_price) 
-              : (targetItem.discount_price || targetItem.price);
-
-            const totalItemPrice = Number(itemPrice) * itemQty;
+            const dp = getDerivedPrice(item);
+            const totalItemPrice = Number(dp.price) * itemQty;
 
             return (
               <div key={item.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100 gap-2">
@@ -187,7 +195,9 @@ const Checkout = () => {
                     {isGift ? item.selected_option?.label : item.account_type}
                   </span>
                 </div>
-                <span className="text-sm font-black text-black whitespace-nowrap">{totalItemPrice.toLocaleString()} MMK</span>
+                <span className={`text-sm font-black whitespace-nowrap ${dp.isPromo ? 'text-red-600' : 'text-black'}`}>
+                  {totalItemPrice.toLocaleString()} MMK
+                </span>
               </div>
             );
           })}
@@ -275,7 +285,7 @@ const Checkout = () => {
         {isSubmitting ? 'Processing Payment...' : (hasPreOrder ? 'Proceed to Pre-Order' : 'Confirm Payment')}
       </button>
 
-      {/* --- NEW: GAME TERMS & CONDITIONS CHECKOUT MODAL --- */}
+      {/* --- GAME TERMS & CONDITIONS CHECKOUT MODAL --- */}
       {showTermsModal && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowTermsModal(false)}></div>
