@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { UploadCloud, Loader2, CheckCircle, Receipt, Check } from 'lucide-react';
+import { UploadCloud, Loader2, CheckCircle, Receipt, Check, FileText, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
@@ -16,6 +16,9 @@ const Checkout = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [generatedOrderNo, setGeneratedOrderNo] = useState('');
+  
+  // NEW: Terms and Conditions Modal State
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   useEffect(() => {
     fetchCartData();
@@ -25,7 +28,6 @@ const Checkout = () => {
     setIsLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
-      // CRITICAL FIX: Fetching BOTH games and gift_cards data joins
       const { data, error } = await supabase
         .from('cart')
         .select('id, account_type, selected_option, quantity, games(*), gift_cards(*)')
@@ -62,16 +64,29 @@ const Checkout = () => {
     }
   };
 
-  const handleConfirmPayment = async () => {
+  // --- NEW: Intercept Confirm Click to Check for Games & Show T&C ---
+  const handleConfirmClick = () => {
     if (!screenshotFile) {
       toast.error("Please upload your payment screenshot first!");
       return;
     }
 
+    const hasGame = cartItems.some(item => !item.gift_cards && item.games);
+    
+    if (hasGame) {
+      setShowTermsModal(true); // Show T&C for Games
+    } else {
+      processOrder(); // Bypass T&C for Gift Cards only
+    }
+  };
+
+  // --- Actual Order Processing Logic ---
+  const processOrder = async () => {
     setIsSubmitting(true);
+    setShowTermsModal(false);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const orderNo = 'GO' + Math.floor(100000 + Math.random() * 900000); 
+      const orderNo = 'GO' + Math.floor(100000 + Math.random() * 900000); // Back to GO
       setGeneratedOrderNo(orderNo);
 
       const fileExt = screenshotFile.name.split('.').pop();
@@ -91,7 +106,9 @@ const Checkout = () => {
           
           let priceToUse = 0;
           if (isGift) priceToUse = item.selected_option.price;
-          else priceToUse = item.account_type === 'Deactivated Account' ? (targetItem.deactivated_discount || targetItem.deactivated_price) : (targetItem.discount_price || targetItem.price);
+          else priceToUse = item.account_type === 'Deactivated Account' 
+            ? (targetItem.deactivated_discount || targetItem.deactivated_price) 
+            : (targetItem.discount_price || targetItem.price);
 
           return { 
             id: targetItem.id,
@@ -109,6 +126,7 @@ const Checkout = () => {
 
       await supabase.from('cart').delete().eq('user_id', session.user.id);
       window.dispatchEvent(new Event('cartUpdated'));
+
       setIsSuccess(true);
     } catch (error) {
       toast.error(error.message || "Failed to submit payment.");
@@ -137,27 +155,34 @@ const Checkout = () => {
   if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-black" /></div>;
 
   return (
-    <div className="flex flex-col px-4 pb-20 pt-2">
+    <div className="flex flex-col px-4 pb-20 pt-2 animate-in fade-in duration-300">
       
       {/* Order Summary */}
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-gray-900 border-b border-gray-100 pb-3"><Receipt className="h-5 w-5 text-gray-500" /> Order Summary</h2>
+        <h2 className="mb-4 flex items-center gap-3 text-lg font-bold text-gray-900 border-b border-gray-100 pb-3">
+          <img src="/order-summary.png" alt="Order Summary" className="h-6 w-6 object-contain" />
+          Order Summary
+        </h2>
         <div className="flex flex-col gap-4">
           {cartItems.map((item) => {
             const isGift = !!item.gift_cards;
             const targetItem = isGift ? item.gift_cards : item.games;
             const itemQty = item.quantity || 1;
             
+            if (!targetItem) return null; 
+
             let itemPrice = 0;
             if (isGift) itemPrice = item.selected_option.price;
-            else itemPrice = item.account_type === 'Deactivated Account' ? (targetItem.deactivated_discount || targetItem.deactivated_price) : (targetItem.discount_price || targetItem.price);
+            else itemPrice = item.account_type === 'Deactivated Account' 
+              ? (targetItem.deactivated_discount || targetItem.deactivated_price) 
+              : (targetItem.discount_price || targetItem.price);
 
             const totalItemPrice = Number(itemPrice) * itemQty;
 
             return (
-              <div key={item.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
-                <div className="flex flex-col truncate pr-4">
-                  <span className="text-sm font-bold text-gray-900 truncate">{itemQty}x {targetItem?.name}</span>
+              <div key={item.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100 gap-2">
+                <div className="flex flex-col truncate flex-1 pr-1">
+                  <span className="text-sm font-bold text-gray-900 truncate leading-tight">{itemQty}x {targetItem?.name}</span>
                   <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-1">
                     {isGift ? item.selected_option?.label : item.account_type}
                   </span>
@@ -173,14 +198,13 @@ const Checkout = () => {
         </div>
       </div>
 
-      {/* Payment Method Selection */}
+      {/* GameOver Payment Method Selection */}
       <div className="mt-6 rounded-2xl shadow-sm border border-gray-100 bg-white overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
           <h2 className="text-base font-bold text-gray-900">Payment Method</h2>
         </div>
         
         <div className="p-4 flex flex-col gap-3">
-          {/* KBZPay Option */}
           <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'kbzpay' ? 'border-green-500 bg-green-50/30 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>
             <div className="flex items-center gap-4">
               <div className="w-14 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm border border-gray-100 p-1.5"><img src="/kbz_logo.png" alt="KBZPay Logo" className="max-h-full max-w-full object-contain" /></div>
@@ -192,7 +216,6 @@ const Checkout = () => {
             <input type="radio" name="paymentMethod" value="kbzpay" className="hidden" checked={paymentMethod === 'kbzpay'} onChange={(e) => setPaymentMethod(e.target.value)} />
           </label>
 
-          {/* Wave Pay Option */}
           <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'wavepay' ? 'border-green-500 bg-green-50/30 shadow-sm' : 'border-gray-100 hover:border-gray-200'}`}>
             <div className="flex items-center gap-4">
               <div className="w-14 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm border border-gray-100 p-1.5"><img src="/wave_logo.jpg" alt="Wave Pay Logo" className="max-h-full max-w-full object-contain rounded-md" /></div>
@@ -206,7 +229,6 @@ const Checkout = () => {
         </div>
       </div>
 
-      {/* Dynamic QR & UPLOAD SECTION */}
       <div className="mt-6 overflow-hidden rounded-2xl shadow-sm border border-gray-100 bg-white">
         <div className="p-8 flex flex-col items-center border-b border-gray-100 bg-gray-50/50">
           {paymentMethod === 'kbzpay' && (
@@ -248,10 +270,44 @@ const Checkout = () => {
         </div>
       </div>
 
-      <button onClick={handleConfirmPayment} disabled={isSubmitting || cartItems.length === 0} className="mt-6 w-full rounded-xl bg-black py-4 font-bold text-white shadow-lg shadow-gray-500/30 hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 flex justify-center items-center gap-2">
+      <button onClick={handleConfirmClick} disabled={isSubmitting || cartItems.length === 0} className="mt-6 w-full rounded-xl bg-black py-4 font-bold text-white shadow-lg shadow-gray-500/30 hover:bg-gray-800 active:scale-95 transition-all disabled:opacity-50 flex justify-center items-center gap-2">
         {isSubmitting && <Loader2 className="h-5 w-5 animate-spin" />}
         {isSubmitting ? 'Processing Payment...' : (hasPreOrder ? 'Proceed to Pre-Order' : 'Confirm Payment')}
       </button>
+
+      {/* --- NEW: GAME TERMS & CONDITIONS CHECKOUT MODAL --- */}
+      {showTermsModal && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowTermsModal(false)}></div>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
+            
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-black rounded-t-2xl">
+              <h3 className="font-bold text-white flex items-center gap-2"><FileText className="w-5 h-5" /> Terms & Conditions</h3>
+              <button onClick={() => setShowTermsModal(false)} className="p-1 rounded-full hover:bg-gray-800"><X className="w-5 h-5 text-white" /></button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+              <p className="text-sm text-gray-800 font-medium leading-relaxed whitespace-pre-wrap">
+                Share အကောင့်ဖြစ်တာကြောင့် အောက်ပါစည်းကမ်းချက်များကိုလိုက်နာဖို့လိုအပ်ပါတယ်{"\n\n"}
+                <span className="font-bold text-black">(Security)</span>{"\n"}
+                SIGN IN ID နှင့် Password ကိုမပြောင်းရန်{"\n\n"}
+                <span className="font-bold text-black">(First person Lifetime warranty)</span>{"\n"}
+                ဂိမ်းအကောင့်ကို တခြားသူတစ်ယောက်ထံ စီးပွားဖြစ်ပြန်လည်ရောင်းချခြင်း /ဂိမ်းစက်ထဲသို့ ထည့်သွင်းရောင်းချခြင်းမပြုလုပ်ရန်{"\n\n"}
+                စက်အပြောင်းလဲပြုလုပ်မည်ဆိုပါက Admin များကို အသိပေးပြီး စက်မရောင်းခင် ဂိမ်းအကောင့်ကိုဖျက်ထားပေးဖို့လိုအပ်ပါတယ် ဒီလိုမှ နောက်စက်အသစ်မှာ ဂိမ်းအကောင့်ကိုပြန်သွင်းပေးမှာဖြစ်ပါတယ်{"\n\n"}
+                AA နှင့်DA ကိုသေချာနားလည်ဖို့လိုအပ်ပါတယ်{"\n\n"}
+                စည်းကမ်းဖောက်ဖျက်ခြင်း တစ်စုံတစ်ရာ ရှိပါက အကောင့်အား ယာယီပိတ်သိမ်းခြင်း သို့မဟုတ် အပြီးတိုင်Ban ခြင်းကိုခံရနိုင်ပါတယ်{"\n"}
+                <span className="font-bold text-red-600 mt-3 block">ဝယ်ယူသူအနေနဲ့ အောက်ပါစည်းကမ်းချက်များကိုလိုက်နာနိုင်ပါသလား?</span>
+              </p>
+            </div>
+            
+            <div className="p-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+              <button onClick={processOrder} className="w-full bg-black text-white font-bold py-3.5 rounded-xl hover:bg-gray-800 active:scale-95 transition-all flex justify-center items-center gap-2">
+                I Agree & Place Order
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
