@@ -25,9 +25,11 @@ const AdminPanel = ({ onBackToStore }) => {
   const [price, setPrice] = useState('');
   const [discountPrice, setDiscountPrice] = useState('');
   
-  // GameOver Account Fields
+  // GameOver Account Fields + NEW STOCK FIELDS
   const [deactivatedPrice, setDeactivatedPrice] = useState('');
   const [deactivatedDiscount, setDeactivatedDiscount] = useState('');
+  const [activatedStock, setActivatedStock] = useState('10');
+  const [deactivatedStock, setDeactivatedStock] = useState('10');
   
   const [youtubeLink, setYoutubeLink] = useState('');
   const [description, setDescription] = useState('');
@@ -39,7 +41,6 @@ const AdminPanel = ({ onBackToStore }) => {
   const [coverUrlInput, setCoverUrlInput] = useState(''); 
   const [coverPreview, setCoverPreview] = useState(null); 
   
-  // --- SCREENSHOTS STATE (Max 6) ---
   const [screenshotInputs, setScreenshotInputs] = useState(() => 
     Array.from({ length: 6 }, () => ({ file: null, url: '', preview: null }))
   );
@@ -130,7 +131,6 @@ const AdminPanel = ({ onBackToStore }) => {
     } catch (error) { toast.error(error.message); }
   };
 
-  // --- SCREENSHOT INPUT HANDLERS ---
   const handleScreenshotFileChange = (index, file) => {
     if (!file) return;
     setScreenshotInputs(prev => prev.map((item, i) => 
@@ -169,7 +169,6 @@ const AdminPanel = ({ onBackToStore }) => {
         finalCoverUrl = coverUrlInput;
       }
 
-      // SCREENSHOTS
       let finalScreenshotUrls = [];
       for (let i = 0; i < screenshotInputs.length; i++) {
         const input = screenshotInputs[i];
@@ -196,6 +195,8 @@ const AdminPanel = ({ onBackToStore }) => {
         discount_price: discountPrice ? parseFloat(discountPrice) : null,
         deactivated_price: deactivatedPrice ? parseFloat(deactivatedPrice) : null,
         deactivated_discount: deactivatedDiscount ? parseFloat(deactivatedDiscount) : null,
+        activated_stock: parseInt(activatedStock) || 0, // NEW STOCK
+        deactivated_stock: parseInt(deactivatedStock) || 0, // NEW STOCK
         size: gameSize,
         youtube_link: youtubeLink,
         description: description,
@@ -236,8 +237,12 @@ const AdminPanel = ({ onBackToStore }) => {
     setGameName(game.name);
     setPrice(game.price.toString());
     setDiscountPrice(game.discount_price ? game.discount_price.toString() : '');
+    
     setDeactivatedPrice(game.deactivated_price ? game.deactivated_price.toString() : '');
     setDeactivatedDiscount(game.deactivated_discount ? game.deactivated_discount.toString() : '');
+    setActivatedStock(game.activated_stock !== null ? game.activated_stock.toString() : '10');
+    setDeactivatedStock(game.deactivated_stock !== null ? game.deactivated_stock.toString() : '10');
+
     setGameSize(game.size || '');
     setYoutubeLink(game.youtube_link || '');
     setDescription(game.description || '');
@@ -266,6 +271,7 @@ const AdminPanel = ({ onBackToStore }) => {
   const resetForm = () => {
     setEditGameId(null); setGameName(''); setPrice(''); setDiscountPrice(''); 
     setDeactivatedPrice(''); setDeactivatedDiscount(''); 
+    setActivatedStock('10'); setDeactivatedStock('10');
     setYoutubeLink(''); setDescription(''); setGameSize(''); setCollections(''); 
     setIsPS5(false); setIsPS4(false); 
     setCoverFile(null); setCoverUrlInput(''); setCoverPreview(null); 
@@ -442,19 +448,6 @@ const AdminPanel = ({ onBackToStore }) => {
                   <Search className="h-5 w-5 text-gray-400" />
                   <input type="text" placeholder="Search order no, customer, or game..." value={orderSearch} onChange={(e) => setOrderSearch(e.target.value)} className="ml-2 w-full bg-transparent text-sm outline-none text-gray-900" />
                 </div>
-                <div className="flex flex-wrap md:flex-nowrap items-center gap-3 w-full md:w-auto">
-                  <Filter className="h-5 w-5 text-gray-400 hidden md:block" />
-                  <select value={orderMonth} onChange={(e) => setOrderMonth(e.target.value)} className="flex-1 md:flex-none rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none">
-                    <option value="">All Months</option>
-                    {[...Array(12)].map((_, i) => <option key={i+1} value={i+1}>{new Date(0, i).toLocaleString('default', { month: 'short' })}</option>)}
-                  </select>
-                  <select value={orderYear} onChange={(e) => setOrderYear(e.target.value)} className="flex-1 md:flex-none rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none">
-                    <option value="">All Years</option>
-                    <option value="2026">2026</option>
-                    <option value="2027">2027</option>
-                    <option value="2028">2028</option>
-                  </select>
-                </div>
               </div>
 
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto">
@@ -568,8 +561,8 @@ const AdminPanel = ({ onBackToStore }) => {
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
                         <th className="p-4 font-semibold">Game</th>
-                        <th className="p-4 font-semibold">Activated Price</th>
-                        <th className="p-4 font-semibold">Deactivated Price</th>
+                        <th className="p-4 font-semibold">Activated (Price / Stock)</th>
+                        <th className="p-4 font-semibold">Deactivated (Price / Stock)</th>
                         <th className="p-4 font-semibold text-right">Actions</th>
                       </tr>
                     </thead>
@@ -597,11 +590,21 @@ const AdminPanel = ({ onBackToStore }) => {
                               {game.discount_price ? (
                                 <div className="flex flex-col"><span className="text-black font-bold">{game.discount_price} MMK</span><span className="text-[10px] md:text-xs text-gray-400 line-through">{game.price} MMK</span></div>
                               ) : (
-                                <span className="font-bold">{game.price} MMK</span>
+                                <span className="font-bold block">{game.price} MMK</span>
                               )}
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded mt-1 inline-block ${game.activated_stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                {game.activated_stock > 0 ? `Stock: ${game.activated_stock}` : 'Out of Stock'}
+                              </span>
                             </td>
                             <td className="p-4 text-sm font-semibold text-gray-900">
-                              {game.deactivated_price ? (game.deactivated_discount ? <span className="font-bold">{game.deactivated_discount} MMK</span> : <span className="font-bold">{game.deactivated_price} MMK</span>) : <span className="text-gray-400">Not set</span>}
+                              {game.deactivated_price ? (
+                                <>
+                                  {game.deactivated_discount ? <span className="font-bold block">{game.deactivated_discount} MMK</span> : <span className="font-bold block">{game.deactivated_price} MMK</span>}
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded mt-1 inline-block ${game.deactivated_stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                    {game.deactivated_stock > 0 ? `Stock: ${game.deactivated_stock}` : 'Out of Stock'}
+                                  </span>
+                                </>
+                              ) : <span className="text-gray-400">Not set</span>}
                             </td>
                             <td className="p-4 flex justify-end gap-2">
                               <button onClick={() => handleEditClick(game)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"><Edit className="h-4 w-4" /></button>
@@ -677,7 +680,6 @@ const AdminPanel = ({ onBackToStore }) => {
                     )}
                   </div>
 
-                  {/* --- NEW: GAME SCREENSHOTS SECTION (Max 6) --- */}
                   <div className="col-span-1 md:col-span-2 flex flex-col gap-4 p-5 border border-dashed border-gray-200 rounded-2xl bg-gray-50/50 mt-4">
                     <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-4 mb-2">
                       <h4 className="text-base font-bold text-gray-900 flex items-center gap-2">
@@ -764,21 +766,33 @@ const AdminPanel = ({ onBackToStore }) => {
                     )}
                   </div>
                   
+                  {/* --- PRICING AND STOCK --- */}
                   <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    {/* Activated Box */}
                     <div className="bg-green-50 p-4 rounded-xl border border-green-100">
                       <h4 className="font-black text-green-800 mb-4 uppercase tracking-widest text-xs">Activated Account</h4>
                       <label className="block text-sm font-bold text-gray-700 mb-2">Regular Price</label>
                       <input type="number" required value={price} onChange={(e) => setPrice(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 mb-4 outline-none focus:border-black" />
                       <label className="block text-sm font-bold text-gray-700 mb-2">Discount Price (Optional)</label>
-                      <input type="number" value={discountPrice} onChange={(e) => setDiscountPrice(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black" />
+                      <input type="number" value={discountPrice} onChange={(e) => setDiscountPrice(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 mb-4 outline-none focus:border-black" />
+                      
+                      {/* NEW: Activated Stock */}
+                      <label className="block text-sm font-bold text-gray-700 mb-2 border-t border-green-200 pt-4">Activated Stock Quantity</label>
+                      <input type="number" required value={activatedStock} onChange={(e) => setActivatedStock(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black" placeholder="e.g. 10" />
                     </div>
 
+                    {/* Deactivated Box */}
                     <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
                       <h4 className="font-black text-orange-800 mb-4 uppercase tracking-widest text-xs">Deactivated Account (Optional)</h4>
                       <label className="block text-sm font-bold text-gray-700 mb-2">Regular Price</label>
                       <input type="number" value={deactivatedPrice} onChange={(e) => setDeactivatedPrice(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 mb-4 outline-none focus:border-black" />
                       <label className="block text-sm font-bold text-gray-700 mb-2">Discount Price (Optional)</label>
-                      <input type="number" value={deactivatedDiscount} onChange={(e) => setDeactivatedDiscount(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black" />
+                      <input type="number" value={deactivatedDiscount} onChange={(e) => setDeactivatedDiscount(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 mb-4 outline-none focus:border-black" />
+                      
+                      {/* NEW: Deactivated Stock */}
+                      <label className="block text-sm font-bold text-gray-700 mb-2 border-t border-orange-200 pt-4">Deactivated Stock Quantity</label>
+                      <input type="number" value={deactivatedStock} onChange={(e) => setDeactivatedStock(e.target.value)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none focus:border-black" placeholder="e.g. 5" />
                     </div>
                   </div>
                   

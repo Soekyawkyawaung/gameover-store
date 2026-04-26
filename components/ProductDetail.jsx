@@ -22,16 +22,15 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
   const shouldTruncate = game.description && game.description.length > DESCRIPTION_LIMIT;
   const [isPlayingTrailer, setIsPlayingTrailer] = useState(false);
 
-  // --- FIXED: GALLERY STATE ---
+  // GALLERY STATE
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
 
-  // Collect all images (Cover + Screenshots) into one array
   const productImages = React.useMemo(() => {
     const images = [];
     if (game.cover_image || game.image) images.push(game.cover_image || game.image);
     if (game.screenshots && Array.isArray(game.screenshots)) {
-      images.push(...game.screenshots.filter(url => url)); // Filter out empty strings
+      images.push(...game.screenshots.filter(url => url));
     }
     return images;
   }, [game]);
@@ -40,15 +39,25 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     checkWishlistStatus();
     setIsExpanded(false); 
     setIsPlayingTrailer(false);
-    setAccountType('Activated Account'); 
     setQuantity(1); 
     setIsGalleryOpen(false);
-    setActiveGalleryIndex(0); // Reset index properly
+    setActiveGalleryIndex(0);
 
     if (isGiftCard && game.options && game.options.length > 0) {
       setSelectedOption(prefilledOption || game.options[0]);
     } else {
       setSelectedOption(null);
+    }
+    
+    // Auto-select the account type that has stock if available
+    if (!isGiftCard) {
+      if (game.activated_stock > 0) {
+        setAccountType('Activated Account');
+      } else if (game.deactivated_stock > 0) {
+        setAccountType('Deactivated Account');
+      } else {
+        setAccountType('Activated Account'); // Default if both out of stock
+      }
     }
   }, [game.id, prefilledOption]);
 
@@ -83,6 +92,11 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return toast.error("Please sign in to add to cart");
 
+    // NEW: Double check stock before adding
+    if (isOutOfStock) {
+      return toast.error("Sorry, this item is out of stock!");
+    }
+
     setIsAddingCart(true);
     try {
       const cartData = {
@@ -113,6 +127,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
   };
 
   const handleBuyNow = async () => {
+    if (isOutOfStock) return toast.error("Sorry, this item is out of stock!");
     await handleAddToCart();
     onBuyNow();
   };
@@ -133,6 +148,13 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     : (accountType === 'Activated Account' ? (game.discount_price || game.price) : (game.deactivated_discount || game.deactivated_price));
   
   const totalPrice = currentBasePrice * (isGiftCard ? quantity : 1);
+
+  // --- NEW: STOCK CHECK LOGIC ---
+  const isOutOfStock = !isGiftCard && (
+    accountType === 'Activated Account' 
+      ? (game.activated_stock <= 0) 
+      : (game.deactivated_stock <= 0)
+  );
 
   return (
     <div className="flex flex-col min-h-screen bg-white pb-32 animate-in fade-in duration-300">
@@ -156,7 +178,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
            }
         }}
       >
-        {/* FIXED: Uses activeGalleryIndex correctly to avoid crashes */}
         <img 
             src={productImages[activeGalleryIndex] || game.cover_image || game.image} 
             alt={game.name} 
@@ -200,25 +221,36 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
           <div className="flex flex-col gap-3 mb-6">
             <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Select Account Type</h3>
             <div className="grid grid-cols-2 gap-3">
+              
+              {/* ACTIVATED ACCOUNT BUTTON */}
               <button 
                 onClick={() => setAccountType('Activated Account')}
-                className={`p-3 rounded-xl border-2 text-left transition-all ${accountType === 'Activated Account' ? 'border-black bg-black text-white shadow-md' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}
+                disabled={game.activated_stock <= 0}
+                className={`p-3 rounded-xl border-2 text-left transition-all relative overflow-hidden flex flex-col ${accountType === 'Activated Account' ? 'border-black bg-black text-white shadow-md' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'} ${game.activated_stock <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <p className="text-xs font-bold mb-1 opacity-80">Activated</p>
                 <p className={`text-sm font-black ${accountType === 'Activated Account' ? 'text-white' : 'text-black'}`}>
                   {game.discount_price ? game.discount_price.toLocaleString() : game.price.toLocaleString()} MMK
                 </p>
+                <div className={`mt-2 text-[9px] font-black px-2 py-1 rounded inline-block uppercase tracking-wider ${game.activated_stock > 0 ? (accountType === 'Activated Account' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600') : 'bg-red-100 text-red-600'}`}>
+                  {game.activated_stock > 0 ? `In Stock` : 'Out of Stock'}
+                </div>
               </button>
 
+              {/* DEACTIVATED ACCOUNT BUTTON */}
               {game.deactivated_price && (
                 <button 
                   onClick={() => setAccountType('Deactivated Account')}
-                  className={`p-3 rounded-xl border-2 text-left transition-all ${accountType === 'Deactivated Account' ? 'border-black bg-black text-white shadow-md' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}
+                  disabled={game.deactivated_stock <= 0}
+                  className={`p-3 rounded-xl border-2 text-left transition-all relative overflow-hidden flex flex-col ${accountType === 'Deactivated Account' ? 'border-black bg-black text-white shadow-md' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'} ${game.deactivated_stock <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <p className="text-xs font-bold mb-1 opacity-80">Deactivated</p>
                   <p className={`text-sm font-black ${accountType === 'Deactivated Account' ? 'text-white' : 'text-black'}`}>
                     {game.deactivated_discount ? game.deactivated_discount.toLocaleString() : game.deactivated_price.toLocaleString()} MMK
                   </p>
+                  <div className={`mt-2 text-[9px] font-black px-2 py-1 rounded inline-block uppercase tracking-wider ${game.deactivated_stock > 0 ? (accountType === 'Deactivated Account' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600') : 'bg-red-100 text-red-600'}`}>
+                    {game.deactivated_stock > 0 ? `In Stock` : 'Out of Stock'}
+                  </div>
                 </button>
               )}
             </div>
@@ -310,27 +342,28 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
       )}
 
       {/* Bottom Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 p-4 flex flex-col gap-3 z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
-        <div className="flex justify-between items-center mb-1 px-1">
+      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-100 p-4 z-40">
+        <div className="flex justify-between items-center mb-3 px-1">
           <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total {isGiftCard && `(x${quantity})`}</span>
           <span className="text-lg font-black text-black">{totalPrice.toLocaleString()} MMK</span>
         </div>
         
         <div className="flex gap-3">
-          <button onClick={handleAddToCart} disabled={isAddingCart || (isGiftCard && !selectedOption)} className="flex items-center justify-center w-14 rounded-xl bg-gray-100 text-gray-900 font-bold active:scale-95 transition-transform disabled:opacity-50">
+          {/* Disable Add to Cart if Out of Stock */}
+          <button onClick={handleAddToCart} disabled={isAddingCart || (isGiftCard && !selectedOption) || isOutOfStock} className="flex items-center justify-center w-14 rounded-xl bg-gray-100 text-gray-900 font-bold active:scale-95 transition-transform disabled:opacity-50">
             <ShoppingCart className="h-5 w-5" />
           </button>
-          <button onClick={handleBuyNow} disabled={isGiftCard && !selectedOption} className="flex-1 items-center justify-center rounded-xl bg-black text-white font-black py-3.5 shadow-lg shadow-gray-500/30 active:scale-95 transition-transform hover:bg-gray-800 disabled:opacity-50">
-            {isPreOrder ? 'PRE-ORDER' : 'BUY NOW'}
+          {/* Change Text and Disable Buy Now if Out of Stock */}
+          <button onClick={handleBuyNow} disabled={(isGiftCard && !selectedOption) || isOutOfStock} className={`flex-1 items-center justify-center rounded-xl text-white font-black py-3.5 shadow-lg active:scale-95 transition-all ${isOutOfStock ? 'bg-gray-300 shadow-none cursor-not-allowed' : 'bg-black shadow-gray-500/30 hover:bg-gray-800'}`}>
+            {isOutOfStock ? 'OUT OF STOCK' : (isPreOrder ? 'PRE-ORDER' : 'BUY NOW')}
           </button>
         </div>
       </div>
 
-      {/* --- PREMIUM FULL SCREEN LIGHTBOX (VERTICALLY SCROLLABLE) --- */}
+      {/* PREMIUM FULL SCREEN LIGHTBOX */}
       {isGalleryOpen && (
         <div className="fixed inset-0 z-[999] bg-[#121212] flex flex-col animate-in fade-in duration-200">
           
-          {/* Header Overlay */}
           <div className="flex items-center justify-between p-4 absolute top-0 w-full z-10 pointer-events-none">
             <div className="text-sm font-bold text-white tracking-widest px-3 py-1 bg-black/60 backdrop-blur-md rounded-lg pointer-events-auto shadow-sm">
               {activeGalleryIndex + 1} <span className="text-gray-400 mx-1">/</span> {productImages.length}
@@ -343,7 +376,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
             </button>
           </div>
           
-          {/* Main Vertically Scrollable Area */}
           <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col items-center justify-start pt-20 pb-4">
             <img 
               src={productImages[activeGalleryIndex]} 
@@ -352,7 +384,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
             />
           </div>
 
-          {/* Bottom Thumbnail Bar */}
           <div className="bg-[#0a0a0a] border-t border-gray-800 pb-8 pt-4">
             <p className="text-center text-white/70 text-[10px] font-bold mb-3 uppercase tracking-widest">Screenshot</p>
             <div className="flex overflow-x-auto px-4 gap-3 snap-x hide-scrollbar justify-start md:justify-center">
