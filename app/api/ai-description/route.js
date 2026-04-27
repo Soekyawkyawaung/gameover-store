@@ -18,7 +18,7 @@ export async function POST(req) {
     const genAI = new GoogleGenerativeAI(apiKey);
     
     // Using gemini-1.5-flash as it is fast and smart!
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
     // --- THE NEW, POWERFUL PROMPT ---
     const prompt = `You are a video game expert writing a highly detailed, structured e-commerce product description for the game "${gameName}". 
