@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Gamepad2, Image as ImageIcon, PlusCircle, Save, LogOut, Loader2, Tags, Trash2, Edit, ShoppingBag, Search, Filter, CreditCard, Plus, X, Menu, UploadCloud, Tag, CalendarClock } from 'lucide-react';
+import { Gamepad2, Image as ImageIcon, PlusCircle, Save, LogOut, Loader2, Tags, Trash2, Edit, ShoppingBag, Search, Filter, CreditCard, Plus, X, Menu, UploadCloud, Tag, CalendarClock, Wand2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
@@ -74,13 +74,16 @@ const AdminPanel = ({ onBackToStore }) => {
   const [promoFile, setPromoFile] = useState(null);
   const [promoPreview, setPromoPreview] = useState(null);
   const [promoText, setPromoText] = useState('');
-  
   const [promoPrices, setPromoPrices] = useState({}); 
   
   const [startDay, setStartDay] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endDay, setEndDay] = useState('');
   const [endTime, setEndTime] = useState('');
+
+  // --- AI DESCRIPTION STATES ---
+  const [descLanguage, setDescLanguage] = useState('en');
+  const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
 
   useEffect(() => {
     fetchGames();
@@ -172,6 +175,30 @@ const AdminPanel = ({ onBackToStore }) => {
     setScreenshotInputs(prev => prev.map((item, i) => 
       i === index ? { file: null, url: '', preview: null } : item
     ));
+  };
+
+  // --- AI GENERATION FUNCTION ---
+  const handleGenerateDescription = async () => {
+    if (!gameName) return toast.error("Please enter a Game Name first!");
+    
+    setIsGeneratingDesc(true);
+    try {
+      const response = await fetch('/api/ai-description', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameName, language: descLanguage })
+      });
+      
+      if (!response.ok) throw new Error("Failed to generate description");
+      
+      const data = await response.json();
+      setDescription(data.description);
+      toast.success("AI Description generated successfully!");
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setIsGeneratingDesc(false);
+    }
   };
 
   const handleSaveGame = async (e) => {
@@ -266,7 +293,6 @@ const AdminPanel = ({ onBackToStore }) => {
     setDeactivatedPrice(game.deactivated_price?.toString() || '');
     setDeactivatedDiscount(game.deactivated_discount?.toString() || '');
     
-    // Safely load stock and fallback to '10' if the column is empty
     setActivatedStock(game.activated_stock?.toString() || '10');
     setDeactivatedStock(game.deactivated_stock?.toString() || '10');
     setReleaseDate(game.release_date || '');
@@ -275,7 +301,6 @@ const AdminPanel = ({ onBackToStore }) => {
     setYoutubeLink(game.youtube_link || '');
     setDescription(game.description || '');
     
-    // Safely handle collections if they aren't formatted correctly
     const safeCollections = Array.isArray(game.collections) ? game.collections : [];
     setCollections(safeCollections.filter(tag => tag !== "PS5 Games" && tag !== "PS4 Games").join(', '));
     setIsPS5(safeCollections.includes("PS5 Games"));
@@ -285,7 +310,6 @@ const AdminPanel = ({ onBackToStore }) => {
     setCoverUrlInput(''); 
     setCoverPreview(game.cover_image); 
 
-    // Safely map existing screenshots into the 6 slots
     const existingSs = Array.isArray(game.screenshots) ? game.screenshots : [];
     setExistingScreenshots(existingSs);
     setScreenshotInputs(Array.from({ length: 6 }, (_, i) => ({
@@ -578,15 +602,15 @@ const AdminPanel = ({ onBackToStore }) => {
                           <tr key={promo.id} className="border-b border-gray-100 hover:bg-gray-50">
                             <td className="p-4 font-bold text-gray-900">{promo.games?.name || 'N/A'}</td>
                             <td className="p-4">
-  <span className="text-xs font-black text-gray-900 uppercase block">
-    {promo.promo_type.replace('_', ' ')}
-  </span>
-  {promo.promo_text && (
-    <span className="text-[10px] font-bold text-blue-600 mt-1 block">
-      "{promo.promo_text}"
-    </span>
-  )}
-</td>
+                              <span className="text-xs font-black text-gray-900 uppercase block">
+                                {promo.promo_type.replace('_', ' ')}
+                              </span>
+                              {promo.promo_text && (
+                                <span className="text-[10px] font-bold text-blue-600 mt-1 block">
+                                  "{promo.promo_text}"
+                                </span>
+                              )}
+                            </td>
                             <td className="p-4">
                               <span className="font-bold text-green-600 block">Act: {promo.discount_price.toLocaleString()}</span>
                               {promo.deactivated_discount_price && <span className="font-bold text-orange-600 block text-xs">Deact: {promo.deactivated_discount_price.toLocaleString()}</span>}
@@ -704,7 +728,6 @@ const AdminPanel = ({ onBackToStore }) => {
                     </div>
                   </div>
 
-                  {/* Photo Section: Shows only if NOT Text Countdown */}
                   {promoType !== 'text_countdown' && (
                     <div className="md:col-span-2 p-4 border border-gray-200 rounded-xl bg-gray-50 animate-in fade-in duration-300">
                       <label className="block text-sm font-bold text-gray-700 mb-2">3. Promotion Photo (Visible on Home)</label>
@@ -724,7 +747,6 @@ const AdminPanel = ({ onBackToStore }) => {
                     </div>
                   )}
 
-                  {/* Text Section: Shows only if Text Countdown is selected */}
                   {promoType === 'text_countdown' && (
                     <div className="md:col-span-2 animate-in fade-in duration-300">
                       <label className="block text-sm font-bold text-gray-700 mb-2">3. Promotion Text (Visible on Home)</label>
@@ -1148,8 +1170,29 @@ const AdminPanel = ({ onBackToStore }) => {
                   </div>
                   
                   <div className="col-span-1 md:col-span-2">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Description</label>
-                    <textarea required value={description} onChange={(e) => setDescription(e.target.value)} rows="4" className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 outline-none focus:border-black transition-colors" placeholder="Game description..." />
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-3">
+                      <label className="block text-sm font-bold text-gray-700">Description</label>
+                      <div className="flex items-center gap-2">
+                        <select 
+  value={descLanguage} 
+  onChange={(e) => setDescLanguage(e.target.value)}
+  className="text-xs font-bold text-gray-900 rounded-lg border border-gray-300 px-3 py-2 outline-none bg-white focus:border-black cursor-pointer"
+>
+  <option value="en">English</option>
+  <option value="mm">Myanmar</option>
+</select>
+                        <button 
+                          type="button" 
+                          onClick={handleGenerateDescription}
+                          disabled={isGeneratingDesc || !gameName}
+                          className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all shadow-sm"
+                        >
+                          {isGeneratingDesc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                          {isGeneratingDesc ? 'Generating...' : 'AI Write'}
+                        </button>
+                      </div>
+                    </div>
+                    <textarea required value={description} onChange={(e) => setDescription(e.target.value)} rows="4" className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 placeholder-gray-400 outline-none focus:border-black transition-colors bg-white" placeholder="Game description..." />
                   </div>
                   
                   <div className="col-span-1 md:col-span-2 flex justify-end mt-2">
