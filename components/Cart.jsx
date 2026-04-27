@@ -110,32 +110,32 @@ const Cart = ({ onBack, onCheckout, promotedGamesIds = {} }) => {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col bg-gray-50">
-        <div className="sticky top-0 z-50 flex items-center bg-white px-4 py-4 shadow-sm border-b border-gray-100">
-          <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-gray-100"><ArrowLeft className="h-6 w-6 text-gray-800" /></button>
-          <h1 className="ml-2 text-lg font-black text-gray-900">Your Cart</h1>
+      <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-[#0a0a0a] transition-colors duration-300">
+        <div className="sticky top-0 z-50 flex items-center bg-white dark:bg-[#121212] px-4 py-4 shadow-sm border-b border-gray-100 dark:border-gray-800">
+          <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"><ArrowLeft className="h-6 w-6 text-gray-800 dark:text-gray-200" /></button>
+          <h1 className="ml-2 text-lg font-black text-gray-900 dark:text-white">Your Cart</h1>
         </div>
-        <div className="flex flex-1 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-black" /></div>
+        <div className="flex flex-1 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-black dark:text-white" /></div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 animate-in slide-in-from-right duration-300">
+    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-[#0a0a0a] animate-in slide-in-from-right duration-300 transition-colors duration-300">
       
-      <div className="sticky top-0 z-50 flex items-center bg-white px-4 py-4 shadow-sm border-b border-gray-100">
-        <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-gray-100 active:scale-95 transition-all">
-          <ArrowLeft className="h-6 w-6 text-gray-800" />
+      <div className="sticky top-0 z-50 flex items-center bg-white dark:bg-[#121212] px-4 py-4 shadow-sm border-b border-gray-100 dark:border-gray-800 transition-colors duration-300">
+        <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95 transition-all">
+          <ArrowLeft className="h-6 w-6 text-gray-800 dark:text-gray-200" />
         </button>
-        <h1 className="ml-2 text-lg font-black text-gray-900">Your Cart</h1>
+        <h1 className="ml-2 text-lg font-black text-gray-900 dark:text-white">Your Cart</h1>
       </div>
 
       {cartItems.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
-          <div className="rounded-full bg-gray-200 p-6 mb-4"><ShoppingCart className="h-10 w-10 text-gray-400" /></div>
-          <h2 className="text-xl font-black text-gray-900 mb-2">Your cart is empty</h2>
-          <p className="text-sm font-semibold text-gray-500 mb-8">Looks like you haven't added any games or gift cards yet.</p>
-          <button onClick={onBack} className="rounded-xl bg-black px-8 py-3.5 font-bold text-white shadow-lg active:scale-95 transition-all hover:bg-gray-800">
+          <div className="rounded-full bg-gray-200 dark:bg-gray-800 p-6 mb-4"><ShoppingCart className="h-10 w-10 text-gray-400 dark:text-gray-500" /></div>
+          <h2 className="text-xl font-black text-gray-900 dark:text-white mb-2">Your cart is empty</h2>
+          <p className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-8">Looks like you haven't added any games or gift cards yet.</p>
+          <button onClick={onBack} className="rounded-xl bg-black dark:bg-white px-8 py-3.5 font-bold text-white dark:text-black shadow-lg active:scale-95 transition-all hover:bg-gray-800 dark:hover:bg-gray-200">
             Continue Shopping
           </button>
         </div>
@@ -153,44 +153,44 @@ const Cart = ({ onBack, onCheckout, promotedGamesIds = {} }) => {
               const totalItemPrice = Number(dp.price) * itemQty;
 
               return (
-                <div key={item.id} className="flex overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-                  <div className="w-28 bg-gray-100 flex items-center justify-center p-2">
+                <div key={item.id} className="flex overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#121212] shadow-sm">
+                  <div className="w-28 bg-gray-100 dark:bg-gray-800 flex items-center justify-center p-2">
                     <img src={targetItem.cover_image || targetItem.image} alt={targetItem.name} className={`h-full w-full ${isGift ? 'object-contain' : 'object-cover rounded-lg'}`} />
                   </div>
                   
                   <div className="flex flex-1 flex-col justify-between p-4">
                     <div className="flex justify-between items-start">
                       <div className="pr-2">
-                        <h3 className="text-sm font-bold text-gray-900 leading-tight">{targetItem.name}</h3>
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-1 mb-2">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{targetItem.name}</h3>
+                        <p className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-1 mb-2">
                           {isGift ? item.selected_option?.label : item.account_type}
                         </p>
                         
-                        <div className="flex items-center gap-3 bg-gray-50 rounded-full px-2 py-1 border border-gray-200 w-fit">
+                        <div className="flex items-center gap-3 bg-gray-50 dark:bg-[#0a0a0a] rounded-full px-2 py-1 border border-gray-200 dark:border-gray-800 w-fit">
                           <button 
                             onClick={() => handleUpdateQuantity(item.id, itemQty, -1)}
                             disabled={itemQty <= 1}
-                            className="w-6 h-6 flex items-center justify-center rounded-full bg-white text-gray-600 shadow-sm border border-gray-200 font-bold disabled:opacity-30 active:scale-95 transition-all"
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 shadow-sm border border-gray-200 dark:border-gray-700 font-bold disabled:opacity-30 active:scale-95 transition-all"
                           >-</button>
-                          <span className="text-xs font-black w-4 text-center text-gray-900">{itemQty}</span>
+                          <span className="text-xs font-black w-4 text-center text-gray-900 dark:text-white">{itemQty}</span>
                           <button 
                             onClick={() => handleUpdateQuantity(item.id, itemQty, 1)}
-                            className="w-6 h-6 flex items-center justify-center rounded-full bg-black text-white shadow-sm font-bold active:scale-95 transition-all"
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-black dark:bg-white text-white dark:text-black shadow-sm font-bold active:scale-95 transition-all"
                           >+</button>
                         </div>
                       </div>
 
-                      <button onClick={() => handleRemoveItem(item.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                      <button onClick={() => handleRemoveItem(item.id)} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors">
                         <Trash2 className="h-5 w-5" />
                       </button>
                     </div>
                     
                     <div className="mt-3 flex items-center gap-2">
-                      <span className={`font-black ${dp.isPromo ? 'text-red-600' : 'text-black'}`}>
+                      <span className={`font-black ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>
                         {totalItemPrice.toLocaleString()} MMK
                       </span>
                       {dp.isPromo && dp.regularPrice && (
-                        <span className="text-[10px] font-bold text-gray-400 line-through">
+                        <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 line-through">
                           {(dp.regularPrice * itemQty).toLocaleString()} MMK
                         </span>
                       )}
@@ -204,14 +204,14 @@ const Cart = ({ onBack, onCheckout, promotedGamesIds = {} }) => {
       )}
 
       {cartItems.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto border-t border-gray-100 bg-white p-4 z-40">
+        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-[#121212] p-4 z-40 transition-colors duration-300">
           <div className="mb-4 flex justify-between items-center px-1">
-            <span className="text-sm font-bold text-gray-500">Subtotal</span>
-            <span className="text-xl font-black text-black">{totalPrice.toLocaleString()} MMK</span>
+            <span className="text-sm font-bold text-gray-500 dark:text-gray-400">Subtotal</span>
+            <span className="text-xl font-black text-black dark:text-white">{totalPrice.toLocaleString()} MMK</span>
           </div>
           <button 
             onClick={onCheckout} 
-            className="w-full rounded-xl bg-black py-4 font-black text-white shadow-lg shadow-gray-500/30 active:scale-95 transition-transform hover:bg-gray-800"
+            className="w-full rounded-xl bg-black dark:bg-white py-4 font-black text-white dark:text-black shadow-lg shadow-gray-500/30 dark:shadow-none active:scale-95 transition-transform hover:bg-gray-800 dark:hover:bg-gray-200"
           >
             PROCEED TO CHECKOUT
           </button>

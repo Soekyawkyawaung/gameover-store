@@ -28,7 +28,7 @@ const CountdownTimer = ({ endTime, textColor = 'text-white' }) => {
         days: Math.floor(difference / (1000 * 60 * 60 * 24)),
         hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
         minutes: Math.floor((difference / 1000 / 60) % 60),
-        seconds: Math.floor((difference / 1000) % 60), // FIXED: Now calculating seconds
+        seconds: Math.floor((difference / 1000) % 60), 
         ended: false
       };
     };
@@ -43,7 +43,7 @@ const CountdownTimer = ({ endTime, textColor = 'text-white' }) => {
   const DigitBox = ({ val, label }) => (
     <div className="flex flex-col items-center">
       <div className={`font-black text-lg md:text-2xl ${textColor} tracking-tight leading-none tabular-nums`}>{String(val).padStart(2, '0')}</div>
-      <div className={`text-[8px] font-bold uppercase ${textColor === 'text-white' ? 'text-gray-400' : 'text-black/60'}`}>{label}</div>
+      <div className={`text-[8px] font-bold uppercase ${textColor === 'text-white' ? 'text-gray-400' : 'text-black/60 dark:text-gray-400'}`}>{label}</div>
     </div>
   );
 
@@ -59,7 +59,6 @@ const CountdownTimer = ({ endTime, textColor = 'text-white' }) => {
       <div className={`text-xl font-bold ${textColor} -mt-3`}>:</div>
       <DigitBox val={timeLeft.minutes} label="m" />
       <div className={`text-xl font-bold ${textColor} -mt-3`}>:</div>
-      {/* FIXED: Displaying Seconds */}
       <DigitBox val={timeLeft.seconds} label="s" /> 
     </div>
   );
@@ -72,7 +71,6 @@ export default function Home() {
   const [games, setGames] = useState([]);
   const [giftCards, setGiftCards] = useState([]);
   
-  // PROMO STATES
   const [promotedGamesIds, setPromotedGamesIds] = useState({}); 
   const [activePromotions, setActivePromotions] = useState([]); 
 
@@ -220,7 +218,7 @@ export default function Home() {
     return (
       <div className="absolute top-2 left-2 flex flex-col gap-1 items-start z-10">
         {platforms.length > 0 && (
-          <div className="bg-gray-900/80 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg border border-gray-700/50 flex gap-1">
+          <div className="bg-gray-900/80 backdrop-blur-sm text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg border border-gray-700/50 flex gap-1">
             {platforms.map(p => <span key={p}>{p}</span>)}
           </div>
         )}
@@ -235,14 +233,13 @@ export default function Home() {
 
   const SeeAllCard = ({ title, categoryArray }) => (
     <div onClick={() => handleSeeAllClick(title, categoryArray)} className="min-w-[140px] max-w-[140px] snap-start flex flex-col justify-start cursor-pointer active:scale-95 transition-transform group">
-      <div className="aspect-square w-full rounded-xl bg-[#141414] flex flex-col items-center justify-center text-white shadow-sm border border-gray-800 hover:bg-black transition-colors">
+      <div className="aspect-square w-full rounded-xl bg-[#141414] flex flex-col items-center justify-center text-white shadow-sm border border-gray-800 hover:bg-black dark:hover:bg-gray-900 transition-colors">
         <span className="text-sm font-bold tracking-widest">See All</span>
         <ChevronRight className="w-6 h-6 mt-1" />
       </div>
     </div>
   );
 
-  // --- UPDATED: getDerivedPrice now returns regularPrice for strikethroughs ---
   const getDerivedPrice = (game) => {
     const isGift = !!game.options;
     if (isGift) {
@@ -259,7 +256,7 @@ export default function Home() {
             deactivatedPrice: promo.deactivated || game.deactivated_discount || game.deactivated_price,
             isGift: false, 
             isPromo: true,
-            regularPrice: basePrice // The original price before the promo
+            regularPrice: basePrice
         };
     }
     
@@ -268,7 +265,7 @@ export default function Home() {
         deactivatedPrice: game.deactivated_discount || game.deactivated_price,
         isGift: false, 
         isPromo: false,
-        regularPrice: game.discount_price ? game.price : null // Original price before standard discount
+        regularPrice: game.discount_price ? game.price : null 
     };
   };
 
@@ -309,8 +306,8 @@ export default function Home() {
   if (currentView === 'admin') return <><Toaster position="top-center" /><AdminPanel onBackToStore={() => setCurrentView('store')} /></>;
 
   return (
-    <div className="min-h-screen w-full bg-gray-50">
-      <div className="relative mx-auto min-h-screen max-w-md bg-white shadow-2xl pb-20 overflow-x-hidden">
+    <div className="min-h-screen w-full bg-gray-50 dark:bg-[#0a0a0a] transition-colors duration-300">
+      <div className="relative mx-auto min-h-screen max-w-md bg-white dark:bg-[#121212] shadow-2xl pb-20 overflow-x-hidden transition-colors duration-300">
         <Toaster position="top-center" />
         
         {currentView !== 'details' && currentView !== 'cart' && currentView !== 'wishlist' && currentView !== 'orders' && currentView !== 'seeAll' && currentView !== 'checkout' && 
@@ -324,30 +321,39 @@ export default function Home() {
           {currentView === 'cart' && <Cart onBack={() => setCurrentView('store')} onCheckout={() => setCurrentView('checkout')} promotedGamesIds={promotedGamesIds} />}
           {currentView === 'wishlist' && <Wishlist onBack={() => setCurrentView('store')} onGameClick={handleGameClick} promotedGamesIds={promotedGamesIds} />}
           {currentView === 'orders' && <MyOrders onBack={() => setCurrentView('store')} />}
-          {currentView === 'checkout' && <div className="animate-in slide-in-from-right duration-300 bg-white min-h-screen pt-4"><button onClick={() => setCurrentView('cart')} className="mx-4 mb-2 text-sm font-bold text-blue-600 hover:underline">← Back to Cart</button><Checkout promotedGamesIds={promotedGamesIds} /></div>}
+          {currentView === 'checkout' && <div className="animate-in slide-in-from-right duration-300 bg-white dark:bg-[#121212] min-h-screen pt-4"><button onClick={() => setCurrentView('cart')} className="mx-4 mb-2 text-sm font-bold text-blue-600 hover:underline">← Back to Cart</button><Checkout promotedGamesIds={promotedGamesIds} /></div>}
           {currentView === 'details' && selectedGame && <ProductDetail game={selectedGame} allGames={[...games, ...giftCards]} onBack={() => setCurrentView('store')} onBuyNow={() => checkAuthAndNavigate('checkout')} onGameClick={handleGameClick} promoPrice={promotedGamesIds[selectedGame.id]} />}
           
-          {/* --- SEE ALL GRID (With Strikethrough) --- */}
+          {/* --- SEE ALL GRID --- */}
           {currentView === 'seeAll' && (
-            <div className="animate-in slide-in-from-right duration-300 min-h-screen bg-gray-50">
-              <div className="sticky top-0 z-40 flex items-center justify-between bg-white px-4 py-4 shadow-sm"><div className="flex items-center"><button onClick={() => setCurrentView('store')} className="p-2 -ml-2 rounded-full hover:bg-gray-100 transition-all"><ArrowLeft className="h-6 w-6 text-gray-800" /></button><h1 className="ml-2 text-xl font-black text-gray-900 truncate max-w-[200px]">{seeAllTitle}</h1></div><button onClick={() => setIsFilterOpen(true)} className="relative p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors"><Filter className="h-5 w-5 text-gray-800" />{activeFilterCount > 0 && <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-black text-[9px] font-bold text-white border border-white">{activeFilterCount}</span>}</button></div>
+            <div className="animate-in slide-in-from-right duration-300 min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
+              <div className="sticky top-0 z-40 flex items-center justify-between bg-white dark:bg-[#121212] px-4 py-4 shadow-sm dark:border-b dark:border-gray-800">
+                <div className="flex items-center">
+                  <button onClick={() => setCurrentView('store')} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"><ArrowLeft className="h-6 w-6 text-gray-800 dark:text-gray-200" /></button>
+                  <h1 className="ml-2 text-xl font-black text-gray-900 dark:text-white truncate max-w-[200px]">{seeAllTitle}</h1>
+                </div>
+                <button onClick={() => setIsFilterOpen(true)} className="relative p-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                  <Filter className="h-5 w-5 text-gray-800 dark:text-gray-200" />
+                  {activeFilterCount > 0 && <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-black dark:bg-white text-[9px] font-bold text-white dark:text-black border border-white dark:border-[#121212]">{activeFilterCount}</span>}
+                </button>
+              </div>
               <div className="p-4 grid grid-cols-2 gap-4">
                 {filteredSeeAllGames.length === 0 ? <div className="col-span-2 text-center py-20 text-gray-500 font-bold">No items match your filters.</div> : filteredSeeAllGames.map(item => {
                     const dp = getDerivedPrice(item);
                     return (
                       <div key={item.id} onClick={() => handleGameClick(item)} className="flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group relative">
                         {!dp.isGift && renderPlatformTags(item.collections, item.release_date)}
-                        <div className={`aspect-square w-full rounded-xl overflow-hidden bg-gray-100 shadow-sm border border-gray-100 flex items-center justify-center ${dp.isGift ? 'p-4' : ''}`}>
+                        <div className={`aspect-square w-full rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-800 flex items-center justify-center ${dp.isGift ? 'p-4' : ''}`}>
                           <img src={item.cover_image || item.image} alt={item.name} className={`w-full h-full group-hover:scale-110 transition-transform ${dp.isGift ? 'object-contain' : 'object-cover'}`} />
                         </div>
                         <div>
-                          <h3 className="text-xs font-bold text-gray-900 truncate">{item.name}</h3>
+                          <h3 className="text-xs font-bold text-gray-900 dark:text-white truncate">{item.name}</h3>
                           <div className="flex flex-col mt-0.5">
-                            <p className={`text-xs font-black ${dp.isPromo ? 'text-red-600' : 'text-black'}`}>
+                            <p className={`text-xs font-black ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>
                                 {dp.isGift ? `From ${dp.price.toLocaleString()} MMK` : `${dp.price.toLocaleString()} MMK`}
                             </p>
                             {dp.regularPrice && dp.price < dp.regularPrice && (
-                                <p className="text-[10px] font-bold text-gray-400 line-through mt-0.5">{dp.regularPrice.toLocaleString()} MMK</p>
+                                <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 line-through mt-0.5">{dp.regularPrice.toLocaleString()} MMK</p>
                             )}
                           </div>
                         </div>
@@ -359,14 +365,49 @@ export default function Home() {
               
               {/* FILTERS OVERLAY */}
               {isFilterOpen && (
-                <div className="fixed inset-0 z-[200] flex flex-col bg-gray-50 text-gray-900 animate-in slide-in-from-bottom duration-300">
-                  <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white"><h2 className="text-lg font-bold">Sort and Filter</h2><button onClick={() => setIsFilterOpen(false)} className="p-2 rounded-full hover:bg-gray-100 transition-colors"><X className="h-6 w-6 text-gray-500 hover:text-gray-900" /></button></div>
-                  <div className="flex-1 overflow-y-auto p-4 pb-32">
-                    <div className="mb-6 bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">Price</h3><div className="flex flex-wrap gap-2">{priceRanges.map(range => (<button key={range} onClick={() => toggleFilter('price', range)} className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${selectedPrices.includes(range) ? 'bg-black text-white border-black shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'}`}>{range}</button>))}</div></div>
-                    <div className="mb-6 bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">Platform (Games Only)</h3><div className="grid grid-cols-2 gap-3">{['PS4', 'PS5'].map(plat => (<button key={plat} onClick={() => toggleFilter('platform', plat)} className={`py-4 flex flex-col items-center justify-center gap-2 rounded-xl text-lg font-black italic tracking-tighter border transition-all ${selectedPlatforms.includes(plat) ? 'bg-black text-white border-black shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}><Gamepad2 className={`h-6 w-6 ${selectedPlatforms.includes(plat) ? 'text-white' : 'text-gray-400'}`} />{plat}</button>))}</div></div>
-                    <div className="mb-6 bg-white p-5 rounded-2xl shadow-sm border border-gray-100"><h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">Genre</h3><div className="flex flex-col">{allUniqueGenres.map(genre => (<label key={genre} className="flex items-center justify-between py-3 cursor-pointer group border-b border-gray-50 last:border-0"><span className="text-sm font-bold text-gray-700 group-hover:text-black transition-colors">{genre}</span><div className={`h-6 w-6 rounded-lg border flex items-center justify-center transition-all ${selectedGenres.includes(genre) ? 'bg-black border-black shadow-sm' : 'border-gray-300 bg-gray-50 group-hover:border-gray-400'}`}>{selectedGenres.includes(genre) && <Check className="h-4 w-4 text-white" />}</div><input type="checkbox" className="hidden" checked={selectedGenres.includes(genre)} onChange={() => toggleFilter('genre', genre)} /></label>))}</div></div>
+                <div className="fixed inset-0 z-[200] flex flex-col bg-gray-50 dark:bg-[#0a0a0a] text-gray-900 dark:text-white animate-in slide-in-from-bottom duration-300">
+                  <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#121212]">
+                    <h2 className="text-lg font-bold">Sort and Filter</h2>
+                    <button onClick={() => setIsFilterOpen(false)} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><X className="h-6 w-6 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white" /></button>
                   </div>
-                  <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 flex items-center gap-4 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-50"><button onClick={() => { setSelectedPrices([]); setSelectedGenres([]); setSelectedPlatforms([]); }} className="flex-1 py-4 text-sm font-bold text-gray-500 hover:text-black transition-colors">Clear all</button><button onClick={() => setIsFilterOpen(false)} className="flex-[2] py-4 rounded-xl bg-black text-white text-sm font-bold shadow-lg shadow-gray-500/30 active:scale-95 transition-all hover:bg-gray-800">Show {filteredSeeAllGames.length} results</button></div>
+                  <div className="flex-1 overflow-y-auto p-4 pb-32">
+                    <div className="mb-6 bg-white dark:bg-[#121212] p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                      <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">Price</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {priceRanges.map(range => (
+                          <button key={range} onClick={() => toggleFilter('price', range)} className={`px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${selectedPrices.includes(range) ? 'bg-black dark:bg-white text-white dark:text-black border-black dark:border-white shadow-md' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600'}`}>{range}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="mb-6 bg-white dark:bg-[#121212] p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                      <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">Platform (Games Only)</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {['PS4', 'PS5'].map(plat => (
+                          <button key={plat} onClick={() => toggleFilter('platform', plat)} className={`py-4 flex flex-col items-center justify-center gap-2 rounded-xl text-lg font-black italic tracking-tighter border transition-all ${selectedPlatforms.includes(plat) ? 'bg-black dark:bg-white text-white dark:text-black border-black dark:border-white shadow-md' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                            <Gamepad2 className={`h-6 w-6 ${selectedPlatforms.includes(plat) ? 'text-white dark:text-black' : 'text-gray-400'}`} />{plat}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="mb-6 bg-white dark:bg-[#121212] p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+                      <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-widest">Genre</h3>
+                      <div className="flex flex-col">
+                        {allUniqueGenres.map(genre => (
+                          <label key={genre} className="flex items-center justify-between py-3 cursor-pointer group border-b border-gray-50 dark:border-gray-800 last:border-0">
+                            <span className="text-sm font-bold text-gray-700 dark:text-gray-300 group-hover:text-black dark:group-hover:text-white transition-colors">{genre}</span>
+                            <div className={`h-6 w-6 rounded-lg border flex items-center justify-center transition-all ${selectedGenres.includes(genre) ? 'bg-black dark:bg-white border-black dark:border-white shadow-sm' : 'border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-900'}`}>
+                              {selectedGenres.includes(genre) && <Check className="h-4 w-4 text-white dark:text-black" />}
+                            </div>
+                            <input type="checkbox" className="hidden" checked={selectedGenres.includes(genre)} onChange={() => toggleFilter('genre', genre)} />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-[#121212] border-t border-gray-100 dark:border-gray-800 flex items-center gap-4 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-50">
+                    <button onClick={() => { setSelectedPrices([]); setSelectedGenres([]); setSelectedPlatforms([]); }} className="flex-1 py-4 text-sm font-bold text-gray-500 hover:text-black dark:hover:text-white transition-colors">Clear all</button>
+                    <button onClick={() => setIsFilterOpen(false)} className="flex-[2] py-4 rounded-xl bg-black dark:bg-white text-white dark:text-black text-sm font-bold shadow-lg shadow-gray-500/30 active:scale-95 transition-all">Show {filteredSeeAllGames.length} results</button>
+                  </div>
                 </div>
               )}
             </div>
@@ -376,30 +417,61 @@ export default function Home() {
           {currentView === 'store' && (
              <div className="animate-in fade-in duration-500">
               
-              <div className="px-4 py-4"><div className="flex items-center rounded-xl bg-gray-100 px-4 py-3 border border-transparent focus-within:border-black focus-within:bg-white transition-all"><Search className="h-5 w-5 text-gray-500" /><input type="text" placeholder="Search games & gift cards..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="ml-3 w-full bg-transparent text-sm font-bold outline-none placeholder-gray-500 text-gray-900" /></div></div>
+              <div className="px-4 py-4">
+                <div className="flex items-center rounded-xl bg-gray-100 dark:bg-gray-800 px-4 py-3 border border-transparent focus-within:border-black dark:focus-within:border-white transition-all">
+                  <Search className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                  <input type="text" placeholder="Search games & gift cards..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="ml-3 w-full bg-transparent text-sm font-bold outline-none placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white" />
+                </div>
+              </div>
               <HeroSlider />
 
               {isLoading ? <div className="p-8 text-center text-sm font-bold text-gray-500">Loading your store...</div> : searchQuery ? (
-                <div className="px-4 mt-6"><h2 className="mb-4 text-lg font-bold text-gray-900">Search Results</h2>{searchResults.length === 0 ? <p className="text-sm font-semibold text-gray-500">No products found.</p> : (<div className="flex flex-col gap-4">{searchResults.map((game) => { const dp = getDerivedPrice(game); return (<div key={game.id} onClick={() => handleGameClick(game)} className="flex overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm cursor-pointer active:scale-[0.98] transition-transform relative group">{renderPlatformTags(game.collections, game.release_date)}<div className="w-1/3 aspect-square bg-gray-100 overflow-hidden"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div><div className="flex w-2/3 flex-col justify-between p-3"><div><h3 className="text-sm font-bold text-gray-900 leading-tight truncate">{game.name}</h3><div className="flex items-center gap-2 mt-1"><p className={`text-sm font-extrabold ${dp.isPromo ? 'text-red-600' : 'text-black'}`}>{dp.price.toLocaleString()} MMK</p>{dp.regularPrice && dp.price < dp.regularPrice && (<p className="text-[10px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()} MMK</p>)}</div></div></div></div>);})}</div>)}</div>
+                <div className="px-4 mt-6">
+                  <h2 className="mb-4 text-lg font-bold text-gray-900 dark:text-white">Search Results</h2>
+                  {searchResults.length === 0 ? <p className="text-sm font-semibold text-gray-500">No products found.</p> : (
+                    <div className="flex flex-col gap-4">
+                      {searchResults.map((game) => { 
+                        const dp = getDerivedPrice(game); 
+                        return (
+                          <div key={game.id} onClick={() => handleGameClick(game)} className="flex overflow-hidden rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#121212] shadow-sm cursor-pointer active:scale-[0.98] transition-transform relative group">
+                            {renderPlatformTags(game.collections, game.release_date)}
+                            <div className="w-1/3 aspect-square bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                              <img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" />
+                            </div>
+                            <div className="flex w-2/3 flex-col justify-between p-3">
+                              <div>
+                                <h3 className="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">{game.name}</h3>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <p className={`text-sm font-extrabold ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>{dp.price.toLocaleString()} MMK</p>
+                                  {dp.regularPrice && dp.price < dp.regularPrice && (<p className="text-[10px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()} MMK</p>)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="mt-6">
                   
                   {/* NEW GAMES */}
                   <div className="px-4 flex justify-between items-end mb-4">
-                    <h2 className="text-lg font-bold text-gray-900">New games for you</h2>
-                    {newGames.length > 10 && (<button onClick={() => handleSeeAllClick('New games for you', newGames)} className="text-xs font-bold text-blue-600 hover:underline">See all &gt;</button>)}
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">New games for you</h2>
+                    {newGames.length > 10 && (<button onClick={() => handleSeeAllClick('New games for you', newGames)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline">See all &gt;</button>)}
                   </div>
                   <div className="flex overflow-x-auto px-4 pb-4 gap-4 snap-x hide-scrollbar">
-                    {newGames.length === 0 ? <p className="text-sm font-semibold text-gray-500 w-full text-center py-4">No new games added yet.</p> : (<>{newGames.slice(0, 10).map(game => { const dp = getDerivedPrice(game); return (<div key={game.id} onClick={() => handleGameClick(game)} className="min-w-[140px] max-w-[140px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group relative">{renderPlatformTags(game.collections, game.release_date)}<div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 shadow-sm border border-gray-100"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div><div><h3 className="text-xs font-bold text-gray-900 truncate">{game.name}</h3><p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600' : 'text-black'}`}>{dp.price.toLocaleString()} MMK</p>{dp.regularPrice && dp.price < dp.regularPrice && (<p className="text-[9px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()} MMK</p>)}</div></div>);})}{newGames.length > 10 && <SeeAllCard title="New games for you" categoryArray={newGames} />}</>)}
+                    {newGames.length === 0 ? <p className="text-sm font-semibold text-gray-500 w-full text-center py-4">No new games added yet.</p> : (<>{newGames.slice(0, 10).map(game => { const dp = getDerivedPrice(game); return (<div key={game.id} onClick={() => handleGameClick(game)} className="min-w-[140px] max-w-[140px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group relative">{renderPlatformTags(game.collections, game.release_date)}<div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-800"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div><div><h3 className="text-xs font-bold text-gray-900 dark:text-white truncate">{game.name}</h3><p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>{dp.price.toLocaleString()} MMK</p>{dp.regularPrice && dp.price < dp.regularPrice && (<p className="text-[9px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()} MMK</p>)}</div></div>);})}{newGames.length > 10 && <SeeAllCard title="New games for you" categoryArray={newGames} />}</>)}
                   </div>
 
                   {/* 2-BLOCK GRID */}
                   <div className="px-4 mt-6 mb-8 grid grid-cols-2 gap-3">
-                    <div className="bg-white rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.04)] border border-gray-100 p-3 flex flex-col relative overflow-hidden">
+                    <div className="bg-white dark:bg-[#121212] rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.04)] border border-gray-100 dark:border-gray-800 p-3 flex flex-col relative overflow-hidden">
                       <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-black text-gray-900 italic tracking-tight">Recommended</h2>
+                        <h2 className="text-sm font-black text-gray-900 dark:text-white italic tracking-tight">Recommended</h2>
                         {dynamicRecs.length > 3 && (
-                          <button onClick={() => setRecPage(p => p === 0 ? 1 : 0)} className="bg-gray-100 p-1.5 rounded-full text-black hover:bg-gray-200 transition-colors">
+                          <button onClick={() => setRecPage(p => p === 0 ? 1 : 0)} className="bg-gray-100 dark:bg-gray-800 p-1.5 rounded-full text-black dark:text-white hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
                             <ChevronRight className={`w-3 h-3 transition-transform duration-300 ${recPage === 1 ? 'rotate-180' : ''}`} />
                           </button>
                         )}
@@ -411,13 +483,13 @@ export default function Home() {
                             const dp = getDerivedPrice(game); 
                             return (
                               <div key={game.id} onClick={() => handleGameClick(game)} className="flex items-center gap-2.5 cursor-pointer group">
-                                <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 border border-gray-100 relative">
+                                <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0 border border-gray-100 dark:border-gray-800 relative">
                                   <img src={game.cover_image} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
                                 </div>
                                 <div className="flex flex-col flex-1 overflow-hidden">
-                                  <p className="text-[10px] font-bold text-gray-900 truncate leading-tight">{game.name}</p>
+                                  <p className="text-[10px] font-bold text-gray-900 dark:text-white truncate leading-tight">{game.name}</p>
                                   <div className="flex items-center gap-1.5 mt-0.5">
-                                    <p className={`text-[10px] font-black ${dp.isPromo ? 'text-red-600' : 'text-black'}`}>{dp.price.toLocaleString()} MMK</p>
+                                    <p className={`text-[10px] font-black ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>{dp.price.toLocaleString()} MMK</p>
                                     {dp.regularPrice && dp.price < dp.regularPrice && (
                                       <p className="text-[8px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()}</p>
                                     )}
@@ -432,8 +504,8 @@ export default function Home() {
                       )}
                     </div>
 
-                    <div className="bg-white rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.04)] border border-gray-100 p-3 flex flex-col">
-                      <h2 className="text-sm font-black text-gray-900 mb-3 flex items-center justify-between">
+                    <div className="bg-white dark:bg-[#121212] rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.04)] border border-gray-100 dark:border-gray-800 p-3 flex flex-col">
+                      <h2 className="text-sm font-black text-gray-900 dark:text-white mb-3 flex items-center justify-between">
                         <span className="italic tracking-tight">History</span>
                       </h2>
                       {recentlyViewed.length > 0 ? (
@@ -442,14 +514,11 @@ export default function Home() {
                             const dp = getDerivedPrice(item); 
                             return (
                               <div key={item.id} onClick={() => handleGameClick(item)} className="cursor-pointer group flex flex-col">
-                                <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 relative mb-1 border border-gray-100">
+                                <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 relative mb-1 border border-gray-100 dark:border-gray-800">
                                   <img src={item.cover_image || item.image} className={`w-full h-full ${dp.isGift ? 'object-contain p-1' : 'object-cover'} group-hover:scale-105 transition-transform`} />
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  <p className={`text-[9px] font-black truncate ${dp.isPromo ? 'text-red-600' : 'text-black'}`}>{dp.price.toLocaleString()}</p>
-                                  {dp.regularPrice && dp.price < dp.regularPrice && (
-                                    <p className="text-[7px] font-bold text-gray-400 line-through truncate">{dp.regularPrice.toLocaleString()}</p>
-                                  )}
+                                  <p className={`text-[9px] font-black truncate ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>{dp.price.toLocaleString()}</p>
                                 </div>
                               </div>
                             )
@@ -463,18 +532,18 @@ export default function Home() {
 
                   {/* TRENDING PS5 GAMES */}
                   <div className="px-4 flex justify-between items-end mb-4">
-                    <h2 className="text-lg font-bold text-gray-900">Trending PS5 Games</h2>
-                    {ps5GamesCategory.length > 10 && (<button onClick={() => handleSeeAllClick('Trending PS5 Games', ps5GamesCategory)} className="text-xs font-bold text-blue-600 hover:underline">See all &gt;</button>)}
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">Trending PS5 Games</h2>
+                    {ps5GamesCategory.length > 10 && (<button onClick={() => handleSeeAllClick('Trending PS5 Games', ps5GamesCategory)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline">See all &gt;</button>)}
                   </div>
                   <div className="flex overflow-x-auto px-4 pb-4 gap-4 snap-x hide-scrollbar">
-                    {ps5GamesCategory.length === 0 ? <p className="text-sm font-semibold text-gray-500 w-full text-center py-4">No PS5 games added yet.</p> : (<>{ps5GamesCategory.slice(0, 10).map(game => { const dp = getDerivedPrice(game); return (<div key={game.id} onClick={() => handleGameClick(game)} className="min-w-[140px] max-w-[140px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group relative">{renderPlatformTags(game.collections, game.release_date)}<div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 shadow-sm border border-gray-100"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div><div><h3 className="text-xs font-bold text-gray-900 truncate">{game.name}</h3><p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600' : 'text-black'}`}>{dp.price.toLocaleString()} MMK</p>{dp.regularPrice && dp.price < dp.regularPrice && (<p className="text-[9px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()} MMK</p>)}</div></div>);})}{ps5GamesCategory.length > 10 && <SeeAllCard title="Trending PS5 Games" categoryArray={ps5GamesCategory} />}</>)}
+                    {ps5GamesCategory.length === 0 ? <p className="text-sm font-semibold text-gray-500 w-full text-center py-4">No PS5 games added yet.</p> : (<>{ps5GamesCategory.slice(0, 10).map(game => { const dp = getDerivedPrice(game); return (<div key={game.id} onClick={() => handleGameClick(game)} className="min-w-[140px] max-w-[140px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group relative">{renderPlatformTags(game.collections, game.release_date)}<div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-800"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div><div><h3 className="text-xs font-bold text-gray-900 dark:text-white truncate">{game.name}</h3><p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>{dp.price.toLocaleString()} MMK</p>{dp.regularPrice && dp.price < dp.regularPrice && (<p className="text-[9px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()} MMK</p>)}</div></div>);})}{ps5GamesCategory.length > 10 && <SeeAllCard title="Trending PS5 Games" categoryArray={ps5GamesCategory} />}</>)}
                   </div>
 
                   {/* GROUPED DISCOUNT PROMOTION BLOCK */}
                   {activePromotions.length > 0 && (
-                    <div className="mt-8 mb-8 animate-in fade-in duration-500 bg-red-50 py-6 border-y border-red-100">
+                    <div className="mt-8 mb-8 animate-in fade-in duration-500 bg-red-50 dark:bg-red-900/10 py-6 border-y border-red-100 dark:border-red-900/20">
                       <div className="px-4 mb-4">
-                        <h2 className="text-lg font-black text-red-600 flex items-center gap-2 tracking-tighter italic">
+                        <h2 className="text-lg font-black text-red-600 dark:text-red-500 flex items-center gap-2 tracking-tighter italic">
                           <Tag className="w-5 h-5" /> SPECIAL OFFERS
                         </h2>
                       </div>
@@ -486,7 +555,7 @@ export default function Home() {
                             {(promoGroup.promo_type === 'only_photo' || promoGroup.promo_type === 'photo_countdown') && (
                               <div 
                                 onClick={() => handleSeeAllClick(promoGroup.promo_type === 'only_photo' ? 'Special Offer' : promoGroup.promo_text || 'Special Offer', promoGroup.games)}
-                                className="relative aspect-[16/8] w-full rounded-3xl overflow-hidden shadow-lg shadow-red-500/10 border-4 border-white cursor-pointer active:scale-[0.98] transition-transform group"
+                                className="relative aspect-[16/8] w-full rounded-3xl overflow-hidden shadow-lg shadow-red-500/10 dark:shadow-red-500/5 border-4 border-white dark:border-gray-800 cursor-pointer active:scale-[0.98] transition-transform group"
                               >
                                 <img src={promoGroup.promo_image_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 p-5 flex flex-col justify-between pointer-events-none">
@@ -506,7 +575,7 @@ export default function Home() {
                             {promoGroup.promo_type === 'text_countdown' && (
                               <div 
                                 onClick={() => handleSeeAllClick(promoGroup.promo_text || 'Special Offer', promoGroup.games)}
-                                className="w-full rounded-3xl p-6 bg-gradient-to-br from-red-600 to-red-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-lg shadow-red-500/20 border-4 border-white cursor-pointer active:scale-[0.98] transition-transform group"
+                                className="w-full rounded-3xl p-6 bg-gradient-to-br from-red-600 to-red-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shadow-lg shadow-red-500/20 border-4 border-white dark:border-gray-800 cursor-pointer active:scale-[0.98] transition-transform group"
                               >
                                 <div className="flex flex-col flex-1 overflow-hidden">
                                   <h3 className="text-xl font-black text-white italic tracking-tighter leading-tight truncate">{promoGroup.promo_text}</h3>
@@ -526,19 +595,19 @@ export default function Home() {
 
                   {/* PRE-ORDERS */}
                   <div className="px-4 flex justify-between items-end mb-4 mt-8">
-                    <h2 className="text-lg font-bold text-gray-900">Pre-Orders</h2>
-                    {preOrderGames.length > 10 && (<button onClick={() => handleSeeAllClick('Pre-Orders', preOrderGames)} className="text-xs font-bold text-blue-600 hover:underline">See all &gt;</button>)}
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">Pre-Orders</h2>
+                    {preOrderGames.length > 10 && (<button onClick={() => handleSeeAllClick('Pre-Orders', preOrderGames)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline">See all &gt;</button>)}
                   </div>
                   <div className="flex overflow-x-auto px-4 pb-4 gap-4 snap-x hide-scrollbar">
-                    {preOrderGames.length === 0 ? <p className="text-sm font-semibold text-gray-500 w-full text-center py-4">No Pre-Orders available right now.</p> : (<>{preOrderGames.slice(0, 10).map(game => { const dp = getDerivedPrice(game); return (<div key={game.id} onClick={() => handleGameClick(game)} className="min-w-[140px] max-w-[140px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group relative">{renderPlatformTags(game.collections, game.release_date)}<div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 shadow-sm border border-gray-100"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div><div><h3 className="text-xs font-bold text-gray-900 truncate">{game.name}</h3><p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600' : 'text-black'}`}>{dp.price.toLocaleString()} MMK</p>{dp.regularPrice && dp.price < dp.regularPrice && (<p className="text-[9px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()} MMK</p>)}</div></div>);})}{preOrderGames.length > 10 && <SeeAllCard title="Pre-Orders" categoryArray={preOrderGames} />}</>)}
+                    {preOrderGames.length === 0 ? <p className="text-sm font-semibold text-gray-500 w-full text-center py-4">No Pre-Orders available right now.</p> : (<>{preOrderGames.slice(0, 10).map(game => { const dp = getDerivedPrice(game); return (<div key={game.id} onClick={() => handleGameClick(game)} className="min-w-[140px] max-w-[140px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group relative">{renderPlatformTags(game.collections, game.release_date)}<div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-800"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div><div><h3 className="text-xs font-bold text-gray-900 dark:text-white truncate">{game.name}</h3><p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>{dp.price.toLocaleString()} MMK</p>{dp.regularPrice && dp.price < dp.regularPrice && (<p className="text-[9px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()} MMK</p>)}</div></div>);})}{preOrderGames.length > 10 && <SeeAllCard title="Pre-Orders" categoryArray={preOrderGames} />}</>)}
                   </div>
 
                   {/* WALLET TOP-UP BLOCK */}
                   {giftCards.length > 0 && (
                     <div className="mt-8 mb-8 animate-in fade-in duration-700">
-                      <div className="px-4 flex justify-between items-end mb-4"><h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><CreditCard className="w-5 h-5 text-gray-400"/> Wallet Top-Up</h2>{giftCards.length > 5 && (<button onClick={() => handleSeeAllClick('Wallet Top-Up', giftCards)} className="text-xs font-bold text-blue-600 hover:underline">See all &gt;</button>)}</div>
+                      <div className="px-4 flex justify-between items-end mb-4"><h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2"><CreditCard className="w-5 h-5 text-gray-400"/> Wallet Top-Up</h2>{giftCards.length > 5 && (<button onClick={() => handleSeeAllClick('Wallet Top-Up', giftCards)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline">See all &gt;</button>)}</div>
                       <div className="flex overflow-x-auto px-4 pb-4 gap-4 snap-x hide-scrollbar">
-                        {giftCards.slice(0, 5).map((card) => { const dp = getDerivedPrice(card); return (<div key={card.id} onClick={() => handleGameClick(card)} className="min-w-[260px] snap-start flex items-center bg-white p-3 rounded-2xl border border-gray-100 shadow-sm cursor-pointer active:scale-[0.97] transition-all relative group overflow-hidden"><div className="w-20 h-20 flex-shrink-0 bg-gray-50 rounded-xl p-2 border border-gray-100 flex items-center justify-center overflow-hidden"><img src={card.image} className="w-full h-full object-contain group-hover:scale-110 transition-transform" alt={card.name} /></div><div className="ml-3 flex-1 flex flex-col justify-center truncate pr-2"><h3 className="text-sm font-bold text-gray-900 leading-snug mb-1 truncate whitespace-normal line-clamp-2">{card.name}</h3><p className={`text-sm font-black mt-1 ${dp.isPromo ? 'text-red-600' : 'text-black'}`}>From {dp.price.toLocaleString()} MMK</p></div></div>);})}
+                        {giftCards.slice(0, 5).map((card) => { const dp = getDerivedPrice(card); return (<div key={card.id} onClick={() => handleGameClick(card)} className="min-w-[260px] snap-start flex items-center bg-white dark:bg-[#121212] p-3 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm cursor-pointer active:scale-[0.97] transition-all relative group overflow-hidden"><div className="w-20 h-20 flex-shrink-0 bg-gray-50 dark:bg-gray-800 rounded-xl p-2 border border-gray-100 dark:border-gray-700 flex items-center justify-center overflow-hidden"><img src={card.image} className="w-full h-full object-contain group-hover:scale-110 transition-transform" alt={card.name} /></div><div className="ml-3 flex-1 flex flex-col justify-center truncate pr-2"><h3 className="text-sm font-bold text-gray-900 dark:text-white leading-snug mb-1 truncate whitespace-normal line-clamp-2">{card.name}</h3><p className={`text-sm font-black mt-1 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>From {dp.price.toLocaleString()} MMK</p></div></div>);})}
                         {giftCards.length > 5 && (<div onClick={() => handleSeeAllClick('Wallet Top-Up', giftCards)} className="min-w-[100px] snap-start flex items-center justify-center cursor-pointer group active:scale-95 transition-transform"><div className="h-[106px] w-full px-6 rounded-2xl bg-[#141414] flex flex-col items-center justify-center text-white shadow-sm border border-gray-800 hover:bg-black transition-colors"><span className="text-xs font-bold tracking-widest mb-1 text-center whitespace-nowrap">SEE ALL</span><ChevronRight className="w-5 h-5" /></div></div>)}
                       </div>
                     </div>
@@ -547,9 +616,9 @@ export default function Home() {
                   {/* PS4 GAMES BLOCK */}
                   {ps4GamesCategory.length > 0 && (
                     <div className="mb-12 animate-in fade-in duration-700">
-                      <div className="px-4 flex justify-between items-end mb-4"><h2 className="text-lg font-bold text-gray-900">PS4 Games</h2>{ps4GamesCategory.length > 10 && (<button onClick={() => handleSeeAllClick('PS4 Games', ps4GamesCategory)} className="text-xs font-bold text-blue-600 hover:underline">See all &gt;</button>)}</div>
+                      <div className="px-4 flex justify-between items-end mb-4"><h2 className="text-lg font-bold text-gray-900 dark:text-white">PS4 Games</h2>{ps4GamesCategory.length > 10 && (<button onClick={() => handleSeeAllClick('PS4 Games', ps4GamesCategory)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline">See all &gt;</button>)}</div>
                       <div className="flex overflow-x-auto px-4 pb-4 gap-4 snap-x hide-scrollbar">
-                        {ps4GamesCategory.slice(0, 10).map(game => { const dp = getDerivedPrice(game); return (<div key={game.id} onClick={() => handleGameClick(game)} className="min-w-[140px] max-w-[140px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group relative">{renderPlatformTags(game.collections, game.release_date)}<div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 shadow-sm border border-gray-100"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div><div><h3 className="text-xs font-bold text-gray-900 truncate">{game.name}</h3><p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600' : 'text-black'}`}>{dp.price.toLocaleString()} MMK</p>{dp.regularPrice && dp.price < dp.regularPrice && (<p className="text-[9px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()} MMK</p>)}</div></div>);})}{ps4GamesCategory.length > 10 && <SeeAllCard title="PS4 Games" categoryArray={ps4GamesCategory} />}
+                        {ps4GamesCategory.slice(0, 10).map(game => { const dp = getDerivedPrice(game); return (<div key={game.id} onClick={() => handleGameClick(game)} className="min-w-[140px] max-w-[140px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group relative">{renderPlatformTags(game.collections, game.release_date)}<div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-800"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div><div><h3 className="text-xs font-bold text-gray-900 dark:text-white truncate">{game.name}</h3><p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>{dp.price.toLocaleString()} MMK</p>{dp.regularPrice && dp.price < dp.regularPrice && (<p className="text-[9px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()} MMK</p>)}</div></div>);})}{ps4GamesCategory.length > 10 && <SeeAllCard title="PS4 Games" categoryArray={ps4GamesCategory} />}
                       </div>
                     </div>
                   )}
