@@ -100,6 +100,7 @@ export default function Home() {
       ]);
       
       const gamesData = gamesResult.data || [];
+      const giftsData = giftsResult.data || [];
       const promosData = promosResult.data || [];
 
       const promoMap = {};
@@ -132,26 +133,28 @@ export default function Home() {
       }
 
       setGames(gamesData);
-      setGiftCards(giftsResult.data || []);
+      setGiftCards(giftsData);
       setIsLoading(false);
-    };
 
-    // --- NEW: CATCH SHARED LINKS ---
-      const urlParams = new URLSearchParams(window.location.search);
-      const sharedGameId = urlParams.get('game');
-      
-      if (sharedGameId) {
-        const foundGame = gamesData.find(g => g.id.toString() === sharedGameId) 
-                       || (giftsResult.data || []).find(g => g.id.toString() === sharedGameId);
+      // --- CATCH SHARED LINKS SAFELY ---
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const sharedGameId = urlParams.get('game');
         
-        if (foundGame) {
-          setSelectedGame(foundGame);
-          setCurrentView('details');
+        if (sharedGameId) {
+          const foundGame = gamesData.find(g => g.id.toString() === sharedGameId) 
+                         || giftsData.find(g => g.id.toString() === sharedGameId);
+          
+          if (foundGame) {
+            setSelectedGame(foundGame);
+            setCurrentView('details');
+            // Clean up the URL securely
+            window.history.replaceState(null, '', window.location.pathname);
+          }
         }
-        
-        // Clean up the URL bar so it looks nice
-        window.history.replaceState({}, document.title, "/");
       }
+    };
+    
     fetchStoreData();
 
     const savedRecent = JSON.parse(localStorage.getItem('gameover_recently_viewed') || '[]');
