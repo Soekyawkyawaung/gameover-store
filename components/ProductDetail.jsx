@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, ShoppingCart, Heart, ChevronDown, ChevronUp, PlayCircle, Image as ImageIcon, X, Tag } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Heart, ChevronDown, ChevronUp, PlayCircle, Image as ImageIcon, X, Tag, Share2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
@@ -89,9 +89,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return toast.error("Please sign in to add to cart");
 
-    if (isOutOfStock) {
-      return toast.error("Sorry, this item is out of stock!");
-    }
+    if (isOutOfStock) return toast.error("Sorry, this item is out of stock!");
 
     setIsAddingCart(true);
     try {
@@ -126,6 +124,29 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     if (isOutOfStock) return toast.error("Sorry, this item is out of stock!");
     await handleAddToCart();
     onBuyNow();
+  };
+
+  // --- NEW: SHARE FUNCTION ---
+  const handleShare = async () => {
+    // Creates a link that looks like: https://gameover.games/?game=12345
+    const shareUrl = `${window.location.origin}/?game=${game.id}`;
+    const shareData = {
+      title: game.name,
+      text: `Check out ${game.name} on Game Over Store!`,
+      url: shareUrl,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        // Fallback for PC/Browsers that don't support the native share menu
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success("Link copied to clipboard!");
+      }
+    } catch (err) {
+      console.error("Error sharing:", err);
+    }
   };
 
   const getYouTubeId = (url) => {
@@ -191,11 +212,19 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
       <div className="sticky top-0 z-40 flex items-center justify-between bg-white dark:bg-[#121212] px-4 py-4 shadow-sm border-b border-gray-100 dark:border-gray-800 transition-colors">
         <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95"><ArrowLeft className="h-6 w-6 text-gray-800 dark:text-gray-200" /></button>
         <h1 className="text-sm font-black text-gray-900 dark:text-white truncate px-4 uppercase">{game.name}</h1>
-        {!isGiftCard ? (
-          <button onClick={handleToggleWishlist} disabled={isWishlistLoading} className="p-2 -mr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95">
-            <Heart className={`h-6 w-6 transition-colors ${isWishlisted ? 'fill-black dark:fill-white text-black dark:text-white' : 'text-gray-400 dark:text-gray-500'}`} />
+        
+        {/* --- SHARE AND WISHLIST BUTTONS --- */}
+        <div className="flex items-center gap-1">
+          <button onClick={handleShare} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95">
+            <Share2 className="h-5 w-5 text-gray-800 dark:text-gray-200" />
           </button>
-        ) : <div className="w-10"></div>}
+
+          {!isGiftCard ? (
+            <button onClick={handleToggleWishlist} disabled={isWishlistLoading} className="p-2 -mr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95">
+              <Heart className={`h-5 w-5 transition-colors ${isWishlisted ? 'fill-black dark:fill-white text-black dark:text-white' : 'text-gray-400 dark:text-gray-500'}`} />
+            </button>
+          ) : <div className="w-10"></div>}
+        </div>
       </div>
 
       <div 
@@ -223,7 +252,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
       <div className="p-5">
         
         {preOrderTag && (
-          <div className="mb-3 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-2 border border-orange-200 dark:border-orange-900/50">
+          <div className="mb-3 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-2 border border-orange-200 dark:border-orange-900/50 w-fit">
             {preOrderTag}
             {game.release_date && <span className="font-bold opacity-70">( {new Date(game.release_date).toLocaleDateString('en-GB')} )</span>}
           </div>

@@ -135,6 +135,23 @@ export default function Home() {
       setGiftCards(giftsResult.data || []);
       setIsLoading(false);
     };
+
+    // --- NEW: CATCH SHARED LINKS ---
+      const urlParams = new URLSearchParams(window.location.search);
+      const sharedGameId = urlParams.get('game');
+      
+      if (sharedGameId) {
+        const foundGame = gamesData.find(g => g.id.toString() === sharedGameId) 
+                       || (giftsResult.data || []).find(g => g.id.toString() === sharedGameId);
+        
+        if (foundGame) {
+          setSelectedGame(foundGame);
+          setCurrentView('details');
+        }
+        
+        // Clean up the URL bar so it looks nice
+        window.history.replaceState({}, document.title, "/");
+      }
     fetchStoreData();
 
     const savedRecent = JSON.parse(localStorage.getItem('gameover_recently_viewed') || '[]');
