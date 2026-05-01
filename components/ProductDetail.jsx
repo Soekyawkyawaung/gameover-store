@@ -12,7 +12,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
   
   const isGiftCard = !!game.options;
 
-  const [accountType, setAccountType] = useState('Activated Account');
+  const [accountType, setAccountType] = useState('');
   const [selectedOption, setSelectedOption] = useState(null);
   const [quantity, setQuantity] = useState(1); 
 
@@ -23,6 +23,37 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
 
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
+
+  // --- DYNAMIC ACCOUNT TYPES LOGIC ---
+  const availableAccounts = React.useMemo(() => {
+    if (isGiftCard) return [];
+    const accounts = [];
+
+    // PS4 Accounts
+    if (game.ps4_price) {
+      accounts.push({ id: 'Activated (PS4)', label: 'Activated (PS4)', price: game.ps4_discount_price || game.ps4_price, original: game.ps4_price, stock: game.ps4_stock, promo: promoPrice?.ps4_promo_price });
+      if (game.ps4_deactivated_price) {
+        accounts.push({ id: 'Deactivated (PS4)', label: 'Deactivated (PS4)', price: game.ps4_deactivated_discount || game.ps4_deactivated_price, original: game.ps4_deactivated_price, stock: game.ps4_deactivated_stock, promo: promoPrice?.ps4_deact_promo_price });
+      }
+    }
+
+    // PS5 Accounts
+    if (game.ps5_price) {
+      accounts.push({ id: 'Activated (PS5)', label: 'Activated (PS5)', price: game.ps5_discount_price || game.ps5_price, original: game.ps5_price, stock: game.ps5_stock, promo: promoPrice?.ps5_promo_price });
+      if (game.ps5_deactivated_price) {
+        accounts.push({ id: 'Deactivated (PS5)', label: 'Deactivated (PS5)', price: game.ps5_deactivated_discount || game.ps5_deactivated_price, original: game.ps5_deactivated_price, stock: game.ps5_deactivated_stock, promo: promoPrice?.ps5_deact_promo_price });
+      }
+    }
+
+    // Legacy Fallback (If PS4/PS5 prices aren't set in Admin yet)
+    if (accounts.length === 0 && game.price) {
+      accounts.push({ id: 'Activated Account', label: 'Activated', price: game.discount_price || game.price, original: game.price, stock: game.activated_stock, promo: promoPrice?.activated });
+      if (game.deactivated_price) {
+        accounts.push({ id: 'Deactivated Account', label: 'Deactivated', price: game.deactivated_discount || game.deactivated_price, original: game.deactivated_price, stock: game.deactivated_stock, promo: promoPrice?.deactivated });
+      }
+    }
+    return accounts;
+  }, [game, promoPrice, isGiftCard]);
 
   const productImages = React.useMemo(() => {
     const images = [];
@@ -47,16 +78,12 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
       setSelectedOption(null);
     }
     
-    if (!isGiftCard) {
-      if (game.activated_stock > 0) {
-        setAccountType('Activated Account');
-      } else if (game.deactivated_stock > 0) {
-        setAccountType('Deactivated Account');
-      } else {
-        setAccountType('Activated Account'); 
-      }
+    if (!isGiftCard && availableAccounts.length > 0) {
+      // Auto-select the first in-stock account, or just the first one if all are out of stock
+      const inStock = availableAccounts.find(acc => acc.stock > 0);
+      setAccountType(inStock ? inStock.id : availableAccounts[0].id);
     }
-  }, [game.id, prefilledOption]);
+  }, [game.id, prefilledOption, availableAccounts]);
 
   const checkWishlistStatus = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -169,40 +196,16 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     }
   }
 
-  // --- NEW: INDEPENDENT PRICE CALCULATIONS ---
-  const activatedRegPrice = game.discount_price || game.price || 0;
-  const isActPromo = !!promoPrice?.activated;
-  const activatedFinPrice = isActPromo ? promoPrice.activated : activatedRegPrice;
-
-  const deactivatedRegPrice = game.deactivated_discount || game.deactivated_price || 0;
-  const isDeactPromo = !!promoPrice?.deactivated;
-  const deactivatedFinPrice = isDeactPromo ? promoPrice.deactivated : deactivatedRegPrice;
-
-  let regularPrice = 0;
-  let finalPrice = 0;
-  let isPromoActive = false;
-
-  if (isGiftCard) {
-    finalPrice = selectedOption ? Number(selectedOption.price) : 0;
-  } else {
-    if (accountType === 'Activated Account') {
-        regularPrice = activatedRegPrice;
-        finalPrice = activatedFinPrice;
-        isPromoActive = isActPromo;
-    } else {
-        regularPrice = deactivatedRegPrice;
-        finalPrice = deactivatedFinPrice;
-        isPromoActive = isDeactPromo;
-    }
-  }
+  // Find the currently selected account object
+  const activeAccountData = availableAccounts.find(acc => acc.id === accountType);
+  const finalPrice = isGiftCard 
+    ? (selectedOption ? Number(selectedOption.price) : 0) 
+    : (activeAccountData ? (activeAccountData.promo || activeAccountData.price) : 0);
   
+  const originalPriceForDisplay = isGiftCard ? null : (activeAccountData?.promo ? activeAccountData.price : activeAccountData?.original);
+  const isPromoActive = !isGiftCard && !!activeAccountData?.promo;
   const totalPrice = finalPrice * (isGiftCard ? quantity : 1);
-
-  const isOutOfStock = !isGiftCard && (
-    accountType === 'Activated Account' 
-      ? (game.activated_stock <= 0) 
-      : (game.deactivated_stock <= 0)
-  );
+  const isOutOfStock = !isGiftCard && activeAccountData && activeAccountData.stock <= 0;
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-[#121212] pb-32 animate-in fade-in duration-300 transition-colors">
@@ -284,60 +287,37 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
           <div className="flex flex-col gap-3 mb-6">
             <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Select Account Type</h3>
             <div className="grid grid-cols-2 gap-3">
-              
-              <button 
-                onClick={() => setAccountType('Activated Account')}
-                disabled={game.activated_stock <= 0}
-                className={`p-3 rounded-xl border-2 text-left transition-all relative overflow-hidden flex flex-col ${accountType === 'Activated Account' ? 'border-black dark:border-white bg-black dark:bg-white text-white dark:text-black shadow-md' : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-[#121212] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-700'} ${game.activated_stock <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <p className="text-xs font-bold mb-1 opacity-80">Activated</p>
-                {isActPromo ? (
+              {availableAccounts.map(acc => {
+                const isSelected = accountType === acc.id;
+                const hasDiscount = acc.promo ? true : (acc.price < acc.original);
+                const displayPrice = acc.promo || acc.price;
+                const displayOriginal = acc.promo ? acc.price : acc.original;
+                const isOut = acc.stock <= 0;
+
+                return (
+                  <button 
+                    key={acc.id}
+                    onClick={() => setAccountType(acc.id)}
+                    disabled={isOut}
+                    className={`p-3 rounded-xl border-2 text-left transition-all relative overflow-hidden flex flex-col ${isSelected ? 'border-black dark:border-white bg-black dark:bg-white text-white dark:text-black shadow-md' : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-[#121212] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-700'} ${isOut ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <p className="text-[10px] font-bold mb-1 opacity-80 uppercase tracking-wide">{acc.label}</p>
                     <div className="flex flex-col">
-                        <p className={`text-sm font-black ${accountType === 'Activated Account' ? 'text-white dark:text-black' : 'text-gray-900 dark:text-white'}`}>{activatedFinPrice.toLocaleString()} MMK</p>
-                        <p className={`text-[10px] font-bold line-through ${accountType === 'Activated Account' ? 'text-white/70 dark:text-black/70' : 'text-gray-400'}`}>{activatedRegPrice.toLocaleString()} MMK</p>
-                    </div>
-                ) : (
-                    <div className="flex flex-col">
-                      <p className={`text-sm font-black ${accountType === 'Activated Account' ? 'text-white dark:text-black' : 'text-black dark:text-white'}`}>
-                        {activatedFinPrice.toLocaleString()} MMK
+                      <p className={`text-sm font-black ${isSelected ? 'text-white dark:text-black' : (hasDiscount && acc.promo ? 'text-gray-900 dark:text-white' : 'text-black dark:text-white')}`}>
+                        {displayPrice.toLocaleString()} MMK
                       </p>
-                      {game.discount_price && game.price && game.discount_price < game.price && (
-                         <p className={`text-[10px] font-bold line-through ${accountType === 'Activated Account' ? 'text-white/70 dark:text-black/70' : 'text-gray-400 dark:text-gray-500'}`}>{game.price.toLocaleString()} MMK</p>
+                      {hasDiscount && (
+                        <p className={`text-[10px] font-bold line-through ${isSelected ? 'text-white/70 dark:text-black/70' : 'text-gray-400 dark:text-gray-500'}`}>
+                          {displayOriginal.toLocaleString()} MMK
+                        </p>
                       )}
                     </div>
-                )}
-                <div className={`mt-2 text-[9px] font-black px-2 py-1 rounded inline-block uppercase tracking-wider ${game.activated_stock > 0 ? (accountType === 'Activated Account' ? 'bg-white/20 dark:bg-black/20 text-white dark:text-black' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400') : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>
-                  {game.activated_stock > 0 ? `In Stock` : 'Out of Stock'}
-                </div>
-              </button>
-
-              {game.deactivated_price && (
-                <button 
-                  onClick={() => setAccountType('Deactivated Account')}
-                  disabled={game.deactivated_stock <= 0}
-                  className={`p-3 rounded-xl border-2 text-left transition-all relative overflow-hidden flex flex-col ${accountType === 'Deactivated Account' ? 'border-black dark:border-white bg-black dark:bg-white text-white dark:text-black shadow-md' : 'border-gray-200 dark:border-gray-800 bg-white dark:bg-[#121212] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-700'} ${game.deactivated_stock <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <p className="text-xs font-bold mb-1 opacity-80">Deactivated</p>
-                  {isDeactPromo ? (
-                      <div className="flex flex-col">
-                          <p className={`text-sm font-black ${accountType === 'Deactivated Account' ? 'text-white dark:text-black' : 'text-gray-900 dark:text-white'}`}>{deactivatedFinPrice.toLocaleString()} MMK</p>
-                          <p className={`text-[10px] font-bold line-through ${accountType === 'Deactivated Account' ? 'text-white/70 dark:text-black/70' : 'text-gray-400'}`}>{deactivatedRegPrice.toLocaleString()} MMK</p>
-                      </div>
-                  ) : (
-                      <div className="flex flex-col">
-                        <p className={`text-sm font-black ${accountType === 'Deactivated Account' ? 'text-white dark:text-black' : 'text-black dark:text-white'}`}>
-                          {deactivatedFinPrice.toLocaleString()} MMK
-                        </p>
-                        {game.deactivated_discount && game.deactivated_price && game.deactivated_discount < game.deactivated_price && (
-                           <p className={`text-[10px] font-bold line-through ${accountType === 'Deactivated Account' ? 'text-white/70 dark:text-black/70' : 'text-gray-400 dark:text-gray-500'}`}>{game.deactivated_price.toLocaleString()} MMK</p>
-                        )}
-                      </div>
-                  )}
-                  <div className={`mt-2 text-[9px] font-black px-2 py-1 rounded inline-block uppercase tracking-wider ${game.deactivated_stock > 0 ? (accountType === 'Deactivated Account' ? 'bg-white/20 dark:bg-black/20 text-white dark:text-black' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400') : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>
-                    {game.deactivated_stock > 0 ? `In Stock` : 'Out of Stock'}
-                  </div>
-                </button>
-              )}
+                    <div className={`mt-2 text-[8px] font-black px-2 py-1 rounded inline-block uppercase tracking-wider ${!isOut ? (isSelected ? 'bg-white/20 dark:bg-black/20 text-white dark:text-black' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400') : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'}`}>
+                      {!isOut ? `In Stock` : 'Out of Stock'}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -427,8 +407,8 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
           <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total {isGiftCard && `(x${quantity})`}</span>
           <div className="flex flex-col items-end">
             <span className={`text-lg font-black ${isPromoActive ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>{totalPrice.toLocaleString()} MMK</span>
-            {isPromoActive && regularPrice && (
-               <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 line-through">{(regularPrice * (isGiftCard ? quantity : 1)).toLocaleString()} MMK</span>
+            {isPromoActive && originalPriceForDisplay && (
+               <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 line-through">{(originalPriceForDisplay * (isGiftCard ? quantity : 1)).toLocaleString()} MMK</span>
             )}
           </div>
         </div>
