@@ -175,24 +175,40 @@ export default function Home() {
     }
     
     const promo = promotedGamesIds[game.id];
-    const basePrice = game.discount_price || game.price;
+
+    // 1. Look for the general price first
+    let basePrice = game.discount_price || game.price;
+    let regPrice = game.discount_price ? game.price : null;
+
+    // 2. If general price is empty, fallback to PS5 or PS4 prices!
+    if (basePrice == null) {
+      if (game.ps5_price != null) {
+        basePrice = game.ps5_discount_price || game.ps5_price;
+        regPrice = game.ps5_discount_price ? game.ps5_price : null;
+      } else if (game.ps4_price != null) {
+        basePrice = game.ps4_discount_price || game.ps4_price;
+        regPrice = game.ps4_discount_price ? game.ps4_price : null;
+      } else {
+        basePrice = 0; // Ultimate fallback to prevent crashes
+      }
+    }
 
     if (promo) {
         return { 
-            price: promo.activated || basePrice, 
-            deactivatedPrice: promo.deactivated || game.deactivated_discount || game.deactivated_price,
+            price: Number(promo.activated || basePrice) || 0, 
+            deactivatedPrice: Number(promo.deactivated || game.deactivated_discount || game.deactivated_price) || 0,
             isGift: false, 
             isPromo: true,
-            regularPrice: basePrice
+            regularPrice: Number(basePrice) || 0
         };
     }
     
     return { 
-        price: basePrice, 
-        deactivatedPrice: game.deactivated_discount || game.deactivated_price,
+        price: Number(basePrice) || 0, 
+        deactivatedPrice: Number(game.deactivated_discount || game.deactivated_price) || 0,
         isGift: false, 
         isPromo: false,
-        regularPrice: game.discount_price ? game.price : null 
+        regularPrice: regPrice ? Number(regPrice) : null 
     };
   };
 

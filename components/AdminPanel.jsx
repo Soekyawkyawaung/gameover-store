@@ -258,17 +258,22 @@ const AdminPanel = ({ onBackToStore }) => {
       if (isPS4) collectionsArray.push("PS4 Games");
       gamePayload.collections = [...new Set(collectionsArray)]; 
 
+      // --- THIS IS THE FIX: Properly check and throw errors ---
       if (isEditing) {
-        await supabase.from('games').update(gamePayload).eq('id', editingGame.id);
+        const { error } = await supabase.from('games').update(gamePayload).eq('id', editingGame.id);
+        if (error) throw error;
         toast.success("Game updated!");
       } else {
-        await supabase.from('games').insert([gamePayload]);
+        const { error } = await supabase.from('games').insert([gamePayload]);
+        if (error) throw error;
         toast.success("Game added!");
       }
       
       resetGameForm();
       fetchData();
-    } catch (error) { toast.error(error.message); }
+    } catch (error) { 
+      toast.error(error.message || "An error occurred while saving the game."); 
+    }
     setIsSubmitting(false);
   };
 
@@ -618,11 +623,11 @@ const AdminPanel = ({ onBackToStore }) => {
 
           {/* --- ADD PROMO FORM --- */}
           {activeTab === 'discount' && showPromoForm && (
-            <div className="max-w-4xl animate-in fade-in duration-300">
+            <div className="max-w-5xl animate-in fade-in duration-300">
               <button onClick={() => setShowPromoForm(false)} className="mb-6 text-sm font-bold text-blue-600 hover:underline">← Back to List</button>
               <form onSubmit={handleSavePromo} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 md:p-8">
                 <h3 className="flex items-center gap-2 text-lg font-bold text-gray-800 mb-6 border-b border-gray-100 pb-4">
-                  <Tag className="h-5 w-5 text-black" /> Add Discount Promotion (Home Screen Block)
+                  <Tag className="h-5 w-5 text-black" /> Add Discount Promotion
                 </h3>
                 
                 <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
@@ -645,52 +650,48 @@ const AdminPanel = ({ onBackToStore }) => {
                     </select>
 
                     {promoGameIds.length > 0 && (
-                      <div className="flex flex-col gap-2 mt-4 p-4 bg-gray-50 border border-gray-200 rounded-xl shadow-inner">
+                      <div className="flex flex-col gap-4 mt-4 p-4 bg-gray-50 border border-gray-200 rounded-xl shadow-inner">
                         <span className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Set Specific Discount Prices:</span>
                         {promoGameIds.map(id => {
                           const game = games.find(g => g.id === id);
                           return (
-                            <div key={id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-gray-200 shadow-sm px-4 py-3 rounded-xl animate-in zoom-in duration-200 relative">
-                               <button type="button" onClick={() => { setPromoGameIds(promoGameIds.filter(gid => gid !== id)); const newPrices = {...promoPrices}; delete newPrices[id]; setPromoPrices(newPrices); }} className="absolute top-2 right-2 p-1.5 bg-gray-100 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors md:hidden"><X className="w-4 h-4"/></button>
-                              <div className="flex flex-col flex-1 pr-6 md:pr-0">
-                                <span className="text-sm font-bold text-gray-900 truncate">{game?.name}</span>
-                              </div>
-                              <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
-                                
+                            <div key={id} className="flex flex-col bg-white border border-gray-200 shadow-sm px-4 py-4 rounded-xl animate-in zoom-in duration-200 relative">
+                              <button type="button" onClick={() => { setPromoGameIds(promoGameIds.filter(gid => gid !== id)); const newPrices = {...promoPrices}; delete newPrices[id]; setPromoPrices(newPrices); }} className="absolute top-2 right-2 p-1.5 bg-gray-100 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"><X className="w-4 h-4"/></button>
+                              
+                              <span className="text-base font-black text-gray-900 truncate mb-4 border-b border-gray-100 pb-2">{game?.name}</span>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {game?.ps5_price && (
-                                  <div className="flex flex-col gap-1 w-full sm:w-auto bg-green-50 p-2 rounded border border-green-100">
-                                    <span className="text-[9px] font-black text-green-700 uppercase">PS5 (Reg Act: {game.ps5_price} | Deact: {game.ps5_deactivated_price})</span>
-                                    <div className="flex gap-1">
-                                      <input type="number" placeholder="Act Promo" value={promoPrices[id]?.ps5_activated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps5_activated: e.target.value}})} className="w-full sm:w-24 rounded border border-gray-300 px-2 py-1.5 text-xs font-bold outline-none" />
-                                      {game.ps5_deactivated_price && <input type="number" placeholder="Deact Promo" value={promoPrices[id]?.ps5_deactivated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps5_deactivated: e.target.value}})} className="w-full sm:w-24 rounded border border-gray-300 px-2 py-1.5 text-xs font-bold outline-none" />}
+                                  <div className="bg-green-50 p-3 rounded-lg border border-green-100">
+                                    <span className="text-[10px] font-black uppercase text-green-700 mb-2 block">PS5 Pricing</span>
+                                    <div className="flex flex-col gap-2">
+                                      <input type="number" placeholder={`PS5 Act Promo (Reg: ${game.ps5_price})`} value={promoPrices[id]?.ps5_activated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps5_activated: e.target.value}})} className="w-full rounded text-sm font-bold border-gray-300 px-3 py-2 outline-none" />
+                                      {game.ps5_deactivated_price && <input type="number" placeholder={`PS5 Deact Promo (Reg: ${game.ps5_deactivated_price})`} value={promoPrices[id]?.ps5_deactivated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps5_deactivated: e.target.value}})} className="w-full rounded text-sm font-bold border-gray-300 px-3 py-2 outline-none" />}
                                     </div>
                                   </div>
                                 )}
 
                                 {game?.ps4_price && (
-                                  <div className="flex flex-col gap-1 w-full sm:w-auto bg-blue-50 p-2 rounded border border-blue-100">
-                                    <span className="text-[9px] font-black text-blue-700 uppercase">PS4 (Reg Act: {game.ps4_price} | Deact: {game.ps4_deactivated_price})</span>
-                                    <div className="flex gap-1">
-                                      <input type="number" placeholder="Act Promo" value={promoPrices[id]?.ps4_activated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps4_activated: e.target.value}})} className="w-full sm:w-24 rounded border border-gray-300 px-2 py-1.5 text-xs font-bold outline-none" />
-                                      {game.ps4_deactivated_price && <input type="number" placeholder="Deact Promo" value={promoPrices[id]?.ps4_deactivated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps4_deactivated: e.target.value}})} className="w-full sm:w-24 rounded border border-gray-300 px-2 py-1.5 text-xs font-bold outline-none" />}
+                                  <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                    <span className="text-[10px] font-black uppercase text-blue-700 mb-2 block">PS4 Pricing</span>
+                                    <div className="flex flex-col gap-2">
+                                      <input type="number" placeholder={`PS4 Act Promo (Reg: ${game.ps4_price})`} value={promoPrices[id]?.ps4_activated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps4_activated: e.target.value}})} className="w-full rounded text-sm font-bold border-gray-300 px-3 py-2 outline-none" />
+                                      {game.ps4_deactivated_price && <input type="number" placeholder={`PS4 Deact Promo (Reg: ${game.ps4_deactivated_price})`} value={promoPrices[id]?.ps4_deactivated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps4_deactivated: e.target.value}})} className="w-full rounded text-sm font-bold border-gray-300 px-3 py-2 outline-none" />}
                                     </div>
                                   </div>
                                 )}
 
                                 {!game?.ps5_price && !game?.ps4_price && (
-                                  <div className="flex flex-col gap-1 w-full sm:w-auto bg-gray-100 p-2 rounded border border-gray-200">
-                                    <span className="text-[9px] font-black text-gray-700 uppercase">General (Reg Act: {game?.price} | Deact: {game?.deactivated_price})</span>
-                                    <div className="flex gap-1">
-                                      <input type="number" required placeholder="Act Promo" value={promoPrices[id]?.activated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], activated: e.target.value}})} className="w-full sm:w-24 rounded border border-gray-300 px-2 py-1.5 text-xs font-bold outline-none" />
-                                      {game?.deactivated_price && <input type="number" placeholder="Deact Promo" value={promoPrices[id]?.deactivated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], deactivated: e.target.value}})} className="w-full sm:w-24 rounded border border-gray-300 px-2 py-1.5 text-xs font-bold outline-none" />}
+                                  <div className="bg-gray-100 p-3 rounded-lg border border-gray-200 col-span-1 md:col-span-2">
+                                    <span className="text-[10px] font-black uppercase text-gray-700 mb-2 block">General Pricing</span>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                      <input type="number" required placeholder={`Act Promo (Reg: ${game?.price})`} value={promoPrices[id]?.activated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], activated: e.target.value}})} className="flex-1 rounded text-sm font-bold border-gray-300 px-3 py-2 outline-none" />
+                                      {game?.deactivated_price && <input type="number" placeholder={`Deact Promo (Reg: ${game?.deactivated_price})`} value={promoPrices[id]?.deactivated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], deactivated: e.target.value}})} className="flex-1 rounded text-sm font-bold border-gray-300 px-3 py-2 outline-none" />}
                                     </div>
                                   </div>
                                 )}
-
-                                <button type="button" onClick={() => { setPromoGameIds(promoGameIds.filter(gid => gid !== id)); const newPrices = {...promoPrices}; delete newPrices[id]; setPromoPrices(newPrices); }} className="hidden md:flex text-gray-400 hover:text-red-600 bg-gray-50 hover:bg-red-50 p-2.5 rounded-lg transition-colors border border-gray-100 w-full sm:w-auto justify-center">
-                                  <X className="w-4 h-4"/>
-                                </button>
                               </div>
+
                             </div>
                           )
                         })}
@@ -717,7 +718,6 @@ const AdminPanel = ({ onBackToStore }) => {
                   {newPromo.promo_type !== 'text_countdown' && (
                     <div className="md:col-span-2 p-4 border border-gray-200 rounded-xl bg-gray-50 animate-in fade-in duration-300">
                       <label className="block text-sm font-bold text-gray-700 mb-2">3. Promotion Photo (Visible on Home)</label>
-                      
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                             <p className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">Upload File</p>
@@ -728,7 +728,6 @@ const AdminPanel = ({ onBackToStore }) => {
                             <input type="url" value={promoImageFile ? '' : (promoPreview || '')} onChange={(e) => { setPromoPreview(e.target.value); setPromoImageFile(null); }} className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none focus:border-black bg-white" placeholder="https://..." />
                          </div>
                       </div>
-
                       {promoPreview && <img src={promoPreview} className="h-40 md:h-60 rounded-xl object-contain bg-white border border-gray-200 p-2 shadow-sm" />}
                     </div>
                   )}
@@ -742,7 +741,6 @@ const AdminPanel = ({ onBackToStore }) => {
 
                   <div className="p-4 border border-dashed border-gray-300 rounded-xl bg-gray-50 shadow-sm md:col-span-2 mt-2">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                      
                       <div>
                         <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><Tags className="h-4 w-4 text-green-600"/> Promo Start Day & Time</label>
                         <div className="flex gap-2">
@@ -750,7 +748,6 @@ const AdminPanel = ({ onBackToStore }) => {
                           <input type="time" required value={startTime} onChange={(e)=>setStartTime(e.target.value)} className="w-36 rounded-xl border border-gray-300 px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-black bg-white" />
                         </div>
                       </div>
-
                       <div>
                         <label className="block text-sm font-bold text-gray-700 mb-3 flex items-center gap-2"><CalendarClock className="h-4 w-4 text-red-600"/> Promo End Day & Time</label>
                         <div className="flex gap-2">
@@ -758,7 +755,6 @@ const AdminPanel = ({ onBackToStore }) => {
                           <input type="time" required value={endTime} onChange={(e)=>setEndTime(e.target.value)} className="w-36 rounded-xl border border-gray-300 px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-black bg-white" />
                         </div>
                       </div>
-
                     </div>
                   </div>
 
