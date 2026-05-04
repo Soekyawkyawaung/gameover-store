@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
-import { Search, Filter, X, ArrowLeft, Check, Gamepad2, CreditCard, ChevronRight, Timer, Tag, Trash2 } from 'lucide-react'; 
+import { Search, Filter, X, ArrowLeft, Check, Gamepad2, CreditCard, ChevronRight, Timer, Tag, Trash2, Sparkles } from 'lucide-react'; 
 import { supabase } from '../lib/supabase';
 import Header from '../components/Header';
 import HeroSlider from '../components/HeroSlider';
@@ -77,13 +77,13 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedGame, setSelectedGame] = useState(null);
 
-  const [recentlyViewed, setRecentlyViewed] = useState([]);
-  const [recPage, setRecPage] = useState(0); 
-
   // --- NEW SEARCH STATES ---
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState([]);
+
+  // --- IN-STOCK CAROUSEL STATE ---
+  const [carouselIndex, setCarouselIndex] = useState(0);
 
   const [seeAllTitle, setSeeAllTitle] = useState('');
   const [seeAllBaseGames, setSeeAllBaseGames] = useState([]); 
@@ -159,9 +159,6 @@ export default function Home() {
     
     fetchStoreData();
 
-    const savedRecent = JSON.parse(localStorage.getItem('gameover_recently_viewed') || '[]');
-    setRecentlyViewed(savedRecent);
-
     // LOAD RECENT SEARCHES
     const savedSearches = JSON.parse(localStorage.getItem('gameover_searches') || '[]');
     setRecentSearches(savedSearches);
@@ -176,11 +173,9 @@ export default function Home() {
     
     const promo = promotedGamesIds[game.id];
 
-    // 1. Look for the general price first
     let basePrice = game.discount_price || game.price;
     let regPrice = game.discount_price ? game.price : null;
 
-    // 2. If general price is empty, fallback to PS5 or PS4 prices!
     if (basePrice == null) {
       if (game.ps5_price != null) {
         basePrice = game.ps5_discount_price || game.ps5_price;
@@ -189,7 +184,7 @@ export default function Home() {
         basePrice = game.ps4_discount_price || game.ps4_price;
         regPrice = game.ps4_discount_price ? game.ps4_price : null;
       } else {
-        basePrice = 0; // Ultimate fallback to prevent crashes
+        basePrice = 0; 
       }
     }
 
@@ -221,35 +216,22 @@ export default function Home() {
 
   const searchResults = games.filter(game => game.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // --- SMART RECOMMENDED (DISCOUNTS ONLY) ---
-  const discountedGames = games.filter(game => {
-    const dp = getDerivedPrice(game);
-    return dp.regularPrice && dp.price < dp.regularPrice;
-  });
-
-  let dynamicRecs = discountedGames.slice(0, 6);
-  if (recentlyViewed.length > 0 && discountedGames.length > 0) {
-    const lastGenre = recentlyViewed[0].collections?.filter(t => t !== 'PS4 Games' && t !== 'PS5 Games')[0];
-    const related = discountedGames.filter(g => g.id !== recentlyViewed[0].id && g.collections?.includes(lastGenre));
-    if (related.length > 0) {
-      dynamicRecs = [...related, ...discountedGames.filter(g => !related.find(r => r.id === g.id))].slice(0, 6);
-    }
-  }
-  const visibleRecs = dynamicRecs.slice(recPage * 3, recPage * 3 + 3);
+  // --- IN-STOCK PS4 & PS5 GAMES (FOR CAROUSEL) ---
+  const inStockConsoleGames = games.filter(game => {
+    if (isPreOrder(game)) return false;
+    const isConsole = game.collections?.some(c => c.toLowerCase().includes('ps4 games') || c.toLowerCase().includes('ps5 games'));
+    const hasStock = 
+      (game.ps5_stock > 0) || (game.ps5_deactivated_stock > 0) ||
+      (game.ps4_stock > 0) || (game.ps4_deactivated_stock > 0) ||
+      (game.activated_stock > 0) || (game.deactivated_stock > 0);
+    return isConsole && hasStock;
+  }).slice(0, 10);
 
   const allUniqueGenres = [...new Set(games.flatMap(g => g.collections?.filter(c => c !== "PS4 Games" && c !== "PS5 Games") || []))];
   const priceRanges = ['10,000 - 50,000 MMK', '50,000 - 100,000 MMK', '100,000 - 150,000 MMK', 'Over 150,000 MMK'];
 
   // --- ACTIONS ---
   const handleGameClick = (item) => {
-    let recent = [...recentlyViewed];
-    recent = recent.filter(g => g.id !== item.id); 
-    recent.unshift(item); 
-    recent = recent.slice(0, 5); 
-    
-    setRecentlyViewed(recent);
-    localStorage.setItem('gameover_recently_viewed', JSON.stringify(recent));
-
     setSelectedGame(item);
     setCurrentView('details');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -290,6 +272,17 @@ export default function Home() {
     }
   };
 
+  // --- CAROUSEL MATH LOGIC ---
+  const handleCarouselScroll = (e) => {
+    const container = e.target;
+    const scrollPosition = container.scrollLeft;
+    // Exactly matches the w-[240px] plus the 1rem (16px) gap we set
+    const itemWidth = 240; 
+    const gap = 16; 
+    const newIndex = Math.round(scrollPosition / (itemWidth + gap));
+    setCarouselIndex(Math.min(Math.max(newIndex, 0), inStockConsoleGames.length - 1));
+  };
+
   const renderPlatformTags = (collections, releaseDate = null) => {
     if (!collections) return null;
     let platforms = [];
@@ -311,15 +304,15 @@ export default function Home() {
 
     if (platforms.length === 0 && !preOrderTag) return null;
     return (
-      <div className="absolute top-2 left-2 flex flex-col gap-1 items-start z-10">
+      <div className="absolute top-3 left-3 flex flex-col gap-1.5 items-start z-10 transition-opacity duration-300">
         {platforms.length > 0 && (
-          <div className="bg-gray-900/80 backdrop-blur-sm text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg border border-gray-700/50 flex gap-1">
+          <div className="bg-gray-900/90 backdrop-blur-sm text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-lg flex gap-1 border border-gray-700/50">
             {platforms.map(p => <span key={p}>{p}</span>)}
           </div>
         )}
         {preOrderTag && (
-          <div className="bg-orange-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg border border-orange-600 flex gap-1 items-center">
-            {preOrderTag !== "Available Now" && <Tag className="h-2.5 w-2.5" />} {preOrderTag}
+          <div className="bg-orange-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-lg border border-orange-600 flex gap-1 items-center">
+            {preOrderTag !== "Available Now" && <Tag className="h-3 w-3" />} {preOrderTag}
           </div>
         )}
       </div>
@@ -617,70 +610,79 @@ export default function Home() {
                       {newGames.length === 0 ? <p className="text-sm font-semibold text-gray-500 w-full text-center py-4">No new games added yet.</p> : (<>{newGames.slice(0, 10).map(game => { const dp = getDerivedPrice(game); return (<div key={game.id} onClick={() => handleGameClick(game)} className="min-w-[140px] max-w-[140px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group relative">{renderPlatformTags(game.collections, game.release_date)}<div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-800"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div><div><h3 className="text-xs font-bold text-gray-900 dark:text-white truncate">{game.name}</h3><p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>{dp.price.toLocaleString()} MMK</p>{dp.regularPrice && dp.price < dp.regularPrice && (<p className="text-[9px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()} MMK</p>)}</div></div>);})}{newGames.length > 10 && <SeeAllCard title="New games for you" categoryArray={newGames} />}</>)}
                     </div>
 
-                    {/* 2-BLOCK GRID */}
-                    <div className="px-4 mt-6 mb-8 grid grid-cols-2 gap-3">
-                      <div className="bg-white dark:bg-[#121212] rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.04)] border border-gray-100 dark:border-gray-800 p-3 flex flex-col relative overflow-hidden">
-                        <div className="flex items-center justify-between mb-3">
-                          <h2 className="text-sm font-black text-gray-900 dark:text-white italic tracking-tight">Recommended</h2>
-                          {dynamicRecs.length > 3 && (
-                            <button onClick={() => setRecPage(p => p === 0 ? 1 : 0)} className="bg-gray-100 dark:bg-gray-800 p-1.5 rounded-full text-black dark:text-white hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                              <ChevronRight className={`w-3 h-3 transition-transform duration-300 ${recPage === 1 ? 'rotate-180' : ''}`} />
-                            </button>
-                          )}
+                    {/* --- IN-STOCK PS4 & PS5 GAMES (SNAP CAROUSEL) --- */}
+                    {inStockConsoleGames.length > 0 && (
+                      <div className="mt-8 mb-10 animate-in fade-in duration-700">
+                        <div className="px-4 mb-4 flex items-center justify-between">
+                          <h2 className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-2">
+                            <Sparkles className="w-5 h-5 text-yellow-500"/> In-Stock Highlights
+                          </h2>
+                          <button onClick={() => handleSeeAllClick('In-Stock Games', inStockConsoleGames)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                            See all &gt;
+                          </button>
                         </div>
                         
-                        {dynamicRecs.length > 0 ? (
-                          <div className="flex flex-col gap-3 flex-1 justify-center animate-in fade-in duration-300" key={recPage}>
-                            {visibleRecs.map(game => { 
-                              const dp = getDerivedPrice(game); 
+                        <div className="relative w-full overflow-hidden">
+                          <div 
+                            className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar pt-4 pb-2"
+                            style={{
+                              paddingLeft: 'calc(50% - 120px)',
+                              paddingRight: 'calc(50% - 120px)',
+                              gap: '1rem'
+                            }}
+                            onScroll={handleCarouselScroll}
+                          >
+                            {inStockConsoleGames.map((game, idx) => {
+                              const dp = getDerivedPrice(game);
+                              const isActive = idx === carouselIndex;
                               return (
-                                <div key={game.id} onClick={() => handleGameClick(game)} className="flex items-center gap-2.5 cursor-pointer group">
-                                  <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0 border border-gray-100 dark:border-gray-800 relative">
-                                    <img src={game.cover_image} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                <div 
+                                  key={game.id} 
+                                  onClick={() => handleGameClick(game)}
+                                  className={`snap-center shrink-0 w-[240px] flex flex-col cursor-pointer transition-all duration-500 ease-out ${isActive ? 'scale-100 opacity-100' : 'scale-90 opacity-40 dark:opacity-30'}`}
+                                >
+                                  <div className="relative">
+                                    <div className={`transition-opacity duration-300 ${isActive ? 'opacity-100' : 'opacity-0'}`}>
+                                      {renderPlatformTags(game.collections, game.release_date)}
+                                    </div>
+                                    <div className={`aspect-square w-full rounded-[2rem] overflow-hidden bg-gray-100 dark:bg-gray-800 transition-all duration-500 ${isActive ? 'shadow-2xl border-[5px] border-black dark:border-white' : 'shadow-sm border-[5px] border-transparent'}`}>
+                                      <img src={game.cover_image} alt={game.name} className="w-full h-full object-cover" />
+                                    </div>
                                   </div>
-                                  <div className="flex flex-col flex-1 overflow-hidden">
-                                    <p className="text-[10px] font-bold text-gray-900 dark:text-white truncate leading-tight">{game.name}</p>
-                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                      <p className={`text-[10px] font-black ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>{dp.price.toLocaleString()} MMK</p>
-                                      {dp.regularPrice && dp.price < dp.regularPrice && (
-                                        <p className="text-[8px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()}</p>
-                                      )}
+                                  
+                                  {/* Fixed height container for text so layout doesn't jump */}
+                                  <div className="h-[70px] mt-4 flex items-start justify-center">
+                                    <div className={`text-center transition-all duration-500 ${isActive ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'}`}>
+                                      <h3 className="text-base font-black text-gray-900 dark:text-white truncate px-2 w-[240px]">{game.name}</h3>
+                                      <div className="flex items-center justify-center gap-2 mt-1">
+                                        <p className={`text-sm font-black ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>
+                                          {dp.price.toLocaleString()} MMK
+                                        </p>
+                                        {dp.regularPrice && dp.price < dp.regularPrice && (
+                                          <p className="text-[10px] font-bold text-gray-400 line-through">
+                                            {dp.regularPrice.toLocaleString()} MMK
+                                          </p>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
-                              )
+                              );
                             })}
                           </div>
-                        ) : (
-                          <div className="flex-1 flex items-center justify-center text-[10px] font-bold text-gray-400 text-center">No discounted items</div>
-                        )}
-                      </div>
-
-                      <div className="bg-white dark:bg-[#121212] rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.04)] border border-gray-100 dark:border-gray-800 p-3 flex flex-col">
-                        <h2 className="text-sm font-black text-gray-900 dark:text-white mb-3 flex items-center justify-between">
-                          <span className="italic tracking-tight">History</span>
-                        </h2>
-                        {recentlyViewed.length > 0 ? (
-                          <div className="grid grid-cols-2 gap-2 flex-1">
-                            {recentlyViewed.slice(0, 4).map(item => { 
-                              const dp = getDerivedPrice(item); 
-                              return (
-                                <div key={item.id} onClick={() => handleGameClick(item)} className="cursor-pointer group flex flex-col">
-                                  <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 relative mb-1 border border-gray-100 dark:border-gray-800">
-                                    <img src={item.cover_image || item.image} className={`w-full h-full ${dp.isGift ? 'object-contain p-1' : 'object-cover'} group-hover:scale-105 transition-transform`} />
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <p className={`text-[9px] font-black truncate ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>{dp.price.toLocaleString()}</p>
-                                  </div>
-                                </div>
-                              )
-                            })}
+                          
+                          {/* Pagination Dots */}
+                          <div className="flex justify-center items-center gap-2 px-4 h-4 mt-2">
+                            {inStockConsoleGames.map((_, idx) => (
+                              <div 
+                                key={idx} 
+                                className={`h-2 rounded-full transition-all duration-500 ${idx === carouselIndex ? 'w-6 bg-black dark:bg-white' : 'w-2 bg-gray-300 dark:bg-gray-700'}`} 
+                              />
+                            ))}
                           </div>
-                        ) : (
-                          <div className="flex-1 flex items-center justify-center text-xs font-bold text-gray-400">No recent history</div>
-                        )}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* TRENDING PS5 GAMES */}
                     <div className="px-4 flex justify-between items-end mb-4">
