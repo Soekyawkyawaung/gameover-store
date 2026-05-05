@@ -14,6 +14,7 @@ const Cart = ({ onBack, onCheckout, promotedGamesIds = {} }) => {
     fetchCart();
   }, []);
 
+  // --- NEW SMART PRICE LOGIC ---
   const getDerivedPrice = (item) => {
     const isGift = !!item.gift_cards;
     const targetItem = isGift ? item.gift_cards : item.games;
@@ -24,18 +25,40 @@ const Cart = ({ onBack, onCheckout, promotedGamesIds = {} }) => {
     }
 
     const promo = promotedGamesIds[targetItem.id];
-    const isActivated = item.account_type === 'Activated Account';
-    
-    const regularPrice = isActivated 
-      ? (targetItem.discount_price || targetItem.price)
-      : (targetItem.deactivated_discount || targetItem.deactivated_price);
+    const accType = item.account_type || '';
 
-    if (promo && ((isActivated && promo.activated) || (!isActivated && promo.deactivated))) {
-      return {
-        price: isActivated ? promo.activated : promo.deactivated,
-        regularPrice: regularPrice,
-        isPromo: true
-      };
+    let regularPrice = 0;
+    let promoPrice = null;
+
+    if (accType.includes('PS5')) {
+      if (accType.includes('Deactivated')) {
+        regularPrice = targetItem.ps5_deactivated_discount || targetItem.ps5_deactivated_price || 0;
+        promoPrice = promo?.ps5_deact_promo_price;
+      } else {
+        regularPrice = targetItem.ps5_discount_price || targetItem.ps5_price || 0;
+        promoPrice = promo?.ps5_promo_price;
+      }
+    } else if (accType.includes('PS4')) {
+      if (accType.includes('Deactivated')) {
+        regularPrice = targetItem.ps4_deactivated_discount || targetItem.ps4_deactivated_price || 0;
+        promoPrice = promo?.ps4_deact_promo_price;
+      } else {
+        regularPrice = targetItem.ps4_discount_price || targetItem.ps4_price || 0;
+        promoPrice = promo?.ps4_promo_price;
+      }
+    } else {
+      // General Fallback
+      if (accType.includes('Deactivated')) {
+        regularPrice = targetItem.deactivated_discount || targetItem.deactivated_price || 0;
+        promoPrice = promo?.deactivated;
+      } else {
+        regularPrice = targetItem.discount_price || targetItem.price || 0;
+        promoPrice = promo?.activated;
+      }
+    }
+
+    if (promoPrice) {
+      return { price: promoPrice, regularPrice: regularPrice, isPromo: true };
     }
 
     return { price: regularPrice, isPromo: false };

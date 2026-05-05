@@ -61,6 +61,11 @@ const Wishlist = ({ onBack, onGameClick }) => {
     }
   };
 
+  // --- SMART BASE PRICE RESOLVER ---
+  const getBasePrice = (game) => {
+    return game.discount_price || game.price || game.ps5_discount_price || game.ps5_price || game.ps4_discount_price || game.ps4_price || 0;
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-[#0a0a0a] pb-20 animate-in slide-in-from-right duration-300 transition-colors duration-300">
       <div className="sticky top-0 z-50 flex items-center bg-white dark:bg-[#121212] px-4 py-4 shadow-sm border-b border-gray-100 dark:border-gray-800">
@@ -89,7 +94,9 @@ const Wishlist = ({ onBack, onGameClick }) => {
                 <div className="flex w-2/3 flex-col justify-between p-3">
                   <div onClick={() => onGameClick(item.games)} className="cursor-pointer">
                     <h3 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">{item.games.name}</h3>
-                    <p className="mt-1 text-sm font-extrabold text-[#000000] dark:text-gray-300">{item.games.discount_price || item.games.price} MMK</p>
+                    <p className="mt-1 text-sm font-extrabold text-[#000000] dark:text-gray-300">
+                      From {getBasePrice(item.games).toLocaleString()} MMK
+                    </p>
                   </div>
                   <div className="flex gap-2 mt-3">
                     <button onClick={() => handleRemove(item.id)} className="flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 p-2 text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400 transition-colors">
