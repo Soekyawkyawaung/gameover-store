@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Toaster } from 'react-hot-toast';
-import { Search, Filter, X, ArrowLeft, Check, Gamepad2, CreditCard, ChevronRight, Timer, Tag, Trash2, Sparkles } from 'lucide-react'; 
+import { Search, Filter, X, ArrowLeft, Check, Gamepad2, CreditCard, ChevronRight, Timer, Tag, Trash2, Sparkles, LayoutGrid, Swords, Ghost, Users, Shield, Car, Crosshair } from 'lucide-react'; 
 import { supabase } from '../lib/supabase';
 import Header from '../components/Header';
 import HeroSlider from '../components/HeroSlider';
@@ -272,11 +272,9 @@ export default function Home() {
     }
   };
 
-  // --- CAROUSEL MATH LOGIC ---
   const handleCarouselScroll = (e) => {
     const container = e.target;
     const scrollPosition = container.scrollLeft;
-    // Exactly matches the w-[240px] plus the 1rem (16px) gap we set
     const itemWidth = 240; 
     const gap = 16; 
     const newIndex = Math.round(scrollPosition / (itemWidth + gap));
@@ -362,6 +360,13 @@ export default function Home() {
 
   const activeFilterCount = (selectedPrices.length > 0 ? 1 : 0) + selectedGenres.length + selectedPlatforms.length;
 
+  // --- HAPTIC FEEDBACK HELPER ---
+  const triggerHaptic = (pattern = 50) => {
+    if (typeof window !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate(pattern); } catch (e) {}
+    }
+  };
+
   if (currentView === 'admin') return <><Toaster position="top-center" /><AdminPanel onBackToStore={() => setCurrentView('store')} /></>;
 
   return (
@@ -378,7 +383,7 @@ export default function Home() {
         <main className="w-full">
           {currentView === 'profile' && <Profile onBack={() => setCurrentView('store')} />}
           {currentView === 'cart' && <Cart onBack={() => setCurrentView('store')} onCheckout={() => setCurrentView('checkout')} promotedGamesIds={promotedGamesIds} />}
-          {currentView === 'wishlist' && <Wishlist onBack={() => setCurrentView('store')} onGameClick={handleGameClick} promotedGamesIds={promotedGamesIds} />}
+          {currentView === 'wishlist' && <Wishlist onBack={() => setCurrentView('store')} onGameClick={handleGameClick} />}
           {currentView === 'orders' && <MyOrders onBack={() => setCurrentView('store')} />}
           {currentView === 'checkout' && <div className="animate-in slide-in-from-right duration-300 bg-white dark:bg-[#121212] min-h-screen pt-4"><button onClick={() => setCurrentView('cart')} className="mx-4 mb-2 text-sm font-bold text-blue-600 hover:underline">← Back to Cart</button><Checkout promotedGamesIds={promotedGamesIds} /></div>}
           {currentView === 'details' && selectedGame && <ProductDetail game={selectedGame} allGames={[...games, ...giftCards]} onBack={() => setCurrentView('store')} onBuyNow={() => checkAuthAndNavigate('checkout')} onGameClick={handleGameClick} promoPrice={promotedGamesIds[selectedGame.id]} />}
@@ -769,13 +774,58 @@ export default function Home() {
 
                     {/* PS4 GAMES BLOCK */}
                     {ps4GamesCategory.length > 0 && (
-                      <div className="mb-12 animate-in fade-in duration-700">
+                      <div className="mb-8 animate-in fade-in duration-700">
                         <div className="px-4 flex justify-between items-end mb-4"><h2 className="text-lg font-bold text-gray-900 dark:text-white">PS4 Games</h2>{ps4GamesCategory.length > 10 && (<button onClick={() => handleSeeAllClick('PS4 Games', ps4GamesCategory)} className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline">See all &gt;</button>)}</div>
                         <div className="flex overflow-x-auto px-4 pb-4 gap-4 snap-x hide-scrollbar">
                           {ps4GamesCategory.slice(0, 10).map(game => { const dp = getDerivedPrice(game); return (<div key={game.id} onClick={() => handleGameClick(game)} className="min-w-[140px] max-w-[140px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group relative">{renderPlatformTags(game.collections, game.release_date)}<div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-800"><img src={game.cover_image} alt={game.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" /></div><div><h3 className="text-xs font-bold text-gray-900 dark:text-white truncate">{game.name}</h3><p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>{dp.price.toLocaleString()} MMK</p>{dp.regularPrice && dp.price < dp.regularPrice && (<p className="text-[9px] font-bold text-gray-400 line-through">{dp.regularPrice.toLocaleString()} MMK</p>)}</div></div>);})}{ps4GamesCategory.length > 10 && <SeeAllCard title="PS4 Games" categoryArray={ps4GamesCategory} />}
                         </div>
                       </div>
                     )}
+
+                    {/* BROWSE ALL & GENRES */}
+                    <div className="px-4 mb-12 animate-in fade-in duration-700">
+                      {/* All Games A-Z Button */}
+                      <button
+                        onClick={() => {
+                          triggerHaptic(30);
+                          const allAZ = [...games].sort((a, b) => a.name.localeCompare(b.name));
+                          handleSeeAllClick('All Games A-Z', allAZ);
+                        }}
+                        className="w-full flex items-center justify-center gap-3 p-5 mb-4 rounded-2xl bg-[#1c1c1e] dark:bg-[#1a1b1e] text-white hover:bg-[#2c2c2e] transition-colors active:scale-[0.98] shadow-sm border border-gray-800"
+                      >
+                        <LayoutGrid className="w-5 h-5 text-gray-300" />
+                        <span className="text-base font-bold tracking-wide">All games A-Z</span>
+                      </button>
+
+                      {/* Genre Grid */}
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { title: 'Action-Adventure', icon: <Swords className="w-8 h-8 opacity-90" />, color: 'bg-[#01655b]' },
+                          { title: 'Horror', icon: <Ghost className="w-8 h-8 opacity-90" />, color: 'bg-[#005e55]' },
+                          { title: 'Co Op', icon: <Users className="w-8 h-8 opacity-90" />, color: 'bg-[#00575b]' },
+                          { title: 'Role Playing games', icon: <Shield className="w-8 h-8 opacity-90" />, color: 'bg-[#004e59]' },
+                          { title: 'Driving', icon: <Car className="w-8 h-8 opacity-90" />, color: 'bg-[#00445b]' },
+                          { title: 'Shooter', icon: <Crosshair className="w-8 h-8 opacity-90" />, color: 'bg-[#003954]' },
+                        ].map((genre, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => {
+                              triggerHaptic(30);
+                              const filtered = games.filter(g => g.collections?.some(c => c.toLowerCase().includes(genre.title.toLowerCase())));
+                              handleSeeAllClick(genre.title, filtered);
+                            }}
+                            className={`relative overflow-hidden ${genre.color} rounded-2xl p-4 h-28 flex flex-col justify-between cursor-pointer active:scale-[0.97] transition-transform shadow-sm group`}
+                          >
+                            <div className="absolute top-3 right-3 text-white transition-transform group-hover:scale-110">
+                              {genre.icon}
+                            </div>
+                            <div className="mt-auto">
+                              <span className="text-white text-sm font-bold tracking-wide shadow-sm">{genre.title}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
 
                   </div>
                 )}
