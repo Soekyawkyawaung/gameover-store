@@ -22,6 +22,11 @@ const AdminPanel = ({ onBackToStore }) => {
   const [gameSearch, setGameSearch] = useState(''); 
   const [showGameForm, setShowGameForm] = useState(false);
 
+  // --- PAGINATION STATES ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const [jumpPageInput, setJumpPageInput] = useState('1');
+  const ITEMS_PER_PAGE = 20;
+
   const [promotions, setPromotions] = useState([]);
   const [giftCards, setGiftCards] = useState([]);
   const [heroSlides, setHeroSlides] = useState([]);
@@ -96,33 +101,32 @@ const AdminPanel = ({ onBackToStore }) => {
     }
   }, [games]);
 
+  // Reset pagination to Page 1 when the user types in the search bar
+  useEffect(() => {
+    setCurrentPage(1);
+    setJumpPageInput('1');
+  }, [gameSearch]);
+
   // --- REALTIME BROWSER NOTIFICATIONS ---
   useEffect(() => {
-    // 1. Request permission from the browser
     if (typeof window !== 'undefined' && 'Notification' in window) {
       if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission();
       }
     }
 
-    // 2. Listen for NEW ORDERS in real-time
     const orderSubscription = supabase
       .channel('admin-order-alerts')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
-        
-        // Play notification sound
         const audio = new Audio('/notification-ding.mp3');
         audio.play().catch(e => console.log("Audio play blocked by browser"));
 
-        // Show Desktop Notification
         if (Notification.permission === 'granted') {
           new Notification('New Order Received! 🎮', {
             body: `Order ${payload.new.order_no} placed for ${payload.new.total_price?.toLocaleString()} MMK.`,
             icon: '/logo.jpg', 
           });
         }
-        
-        // Refresh the admin dashboard data automatically
         fetchData();
       })
       .subscribe();
@@ -263,7 +267,6 @@ const AdminPanel = ({ onBackToStore }) => {
       
       const numFields = ['price', 'discount_price', 'activated_stock', 'deactivated_price', 'deactivated_discount', 'deactivated_stock', 'ps4_price', 'ps4_discount_price', 'ps4_stock', 'ps4_deactivated_price', 'ps4_deactivated_discount', 'ps4_deactivated_stock', 'ps5_price', 'ps5_discount_price', 'ps5_stock', 'ps5_deactivated_price', 'ps5_deactivated_discount', 'ps5_deactivated_stock'];
       numFields.forEach(field => {
-        // DEFAULT TO 0 INSTEAD OF NULL TO PREVENT DATABASE CRASHES
         gamePayload[field] = gamePayload[field] ? Number(gamePayload[field]) : 0; 
       });
 
@@ -475,7 +478,6 @@ const AdminPanel = ({ onBackToStore }) => {
     finally { setIsSubmitting(false); }
   };
 
-
   const renderPricingBlock = (title, prefix, stateObj, isEditing) => (
     <div className="col-span-1 md:col-span-2 border-t border-gray-200 dark:border-gray-800 pt-6 mt-4">
       <h3 className="text-sm font-black text-gray-900 dark:text-white mb-4 uppercase tracking-widest bg-gray-100 dark:bg-gray-800 py-2 px-3 rounded-lg inline-block">{title}</h3>
@@ -525,6 +527,29 @@ const AdminPanel = ({ onBackToStore }) => {
     return game.name.toLowerCase().includes(searchLower) || (game.collections && game.collections.some(c => c.toLowerCase().includes(searchLower)));
   });
 
+  // --- PAGINATION LOGIC ---
+  const totalPages = Math.max(1, Math.ceil(filteredGames.length / ITEMS_PER_PAGE));
+  const currentGames = filteredGames.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+      setJumpPageInput(newPage.toString());
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleJumpPage = (e) => {
+    e.preventDefault();
+    const pageNum = parseInt(jumpPageInput, 10);
+    if (pageNum >= 1 && pageNum <= totalPages) {
+      setCurrentPage(pageNum);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      toast.error(`Please enter a page between 1 and ${totalPages}`);
+      setJumpPageInput(currentPage.toString());
+    }
+  };
 
   if (isLoading) return <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-[#0a0a0a]"><Loader2 className="h-10 w-10 animate-spin text-black dark:text-white" /></div>;
 
@@ -888,7 +913,6 @@ const AdminPanel = ({ onBackToStore }) => {
                     </ul>
                    <form onSubmit={handleUpdateOrder} className="flex flex-col gap-4">
                       
-                      {/* --- NEW SEPARATED PAYMENT METHOD BOX --- */}
                       <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30 mb-2">
                         <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest block mb-1">Customer Paid Via</span>
                         <span className="text-base font-black text-gray-900 dark:text-white">
@@ -907,7 +931,6 @@ const AdminPanel = ({ onBackToStore }) => {
                       </div>
                       <div>
                         <label className="block text-sm font-bold text-gray-700 mb-2">Redeem Code / Account Details to Send to User</label>
-                        {/* --- THIS TEXTAREA IS NOW CLEANED OF THE PAYMENT INFO --- */}
                         <textarea 
                           name="deliveryInfo" 
                           defaultValue={selectedOrder.delivery_info?.includes('Payment Method Used:') ? selectedOrder.delivery_info.split('Payment Method Used:')[0].trim() : (selectedOrder.delivery_info || '')} 
@@ -956,52 +979,92 @@ const AdminPanel = ({ onBackToStore }) => {
               {isLoading ? (
                 <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-black" /></div>
               ) : (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto">
-                  <table className="w-full text-left border-collapse whitespace-nowrap md:whitespace-normal">
-                    <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
-                        <th className="p-4 font-semibold">Game</th>
-                        <th className="p-4 font-semibold">Platform & Price</th>
-                        <th className="p-4 font-semibold text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredGames.length === 0 ? (
-                        <tr><td colSpan="3" className="p-8 text-center text-gray-500">No games match your search.</td></tr>
-                      ) : (
-                        filteredGames.map(game => (
-                          <tr key={game.id} className="border-b border-gray-100 hover:bg-gray-50">
-                            <td className="p-4 flex items-center gap-3 md:gap-4">
-                              <div className="h-10 w-10 md:h-12 md:w-12 rounded object-cover overflow-hidden bg-gray-100 border border-gray-100 relative group flex-shrink-0">
-                                <img src={game.cover_image} alt={game.name} className="h-full w-full object-cover transition-transform group-hover:scale-110" />
-                                {getPlatformTags(game.collections) && (
-                                  <div className="absolute top-0.5 left-0.5 bg-gray-800/80 text-white text-[8px] font-bold px-1 py-[1px] rounded shadow hidden md:block">{getPlatformTags(game.collections)}</div>
-                                )}
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="font-bold text-sm md:text-base text-gray-900 truncate max-w-[200px] md:max-w-xs">{game.name}</span>
-                                <div className="text-[10px] text-gray-400 mt-0.5 hidden md:block">
-                                  {game.collections?.filter(t => t !== "PS5 Games" && t !== "PS4 Games").join(', ')}
+                <>
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto">
+                    <table className="w-full text-left border-collapse whitespace-nowrap md:whitespace-normal">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
+                          <th className="p-4 font-semibold">Game</th>
+                          <th className="p-4 font-semibold">Platform & Price</th>
+                          <th className="p-4 font-semibold text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentGames.length === 0 ? (
+                          <tr><td colSpan="3" className="p-8 text-center text-gray-500">No games match your search.</td></tr>
+                        ) : (
+                          currentGames.map(game => (
+                            <tr key={game.id} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="p-4 flex items-center gap-3 md:gap-4">
+                                <div className="h-10 w-10 md:h-12 md:w-12 rounded object-cover overflow-hidden bg-gray-100 border border-gray-100 relative group flex-shrink-0">
+                                  <img src={game.cover_image} alt={game.name} className="h-full w-full object-cover transition-transform group-hover:scale-110" />
+                                  {getPlatformTags(game.collections) && (
+                                    <div className="absolute top-0.5 left-0.5 bg-gray-800/80 text-white text-[8px] font-bold px-1 py-[1px] rounded shadow hidden md:block">{getPlatformTags(game.collections)}</div>
+                                  )}
                                 </div>
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              <div className="flex flex-col gap-1 text-[11px] md:text-xs font-semibold text-gray-800">
-                                {game.ps5_price && <span><span className="font-black text-black">PS5 Act:</span> {game.ps5_discount_price || game.ps5_price} | <span className="font-black text-gray-600">Deact:</span> {game.ps5_deactivated_discount || game.ps5_deactivated_price || 'N/A'}</span>}
-                                {game.ps4_price && <span><span className="font-black text-black">PS4 Act:</span> {game.ps4_discount_price || game.ps4_price} | <span className="font-black text-gray-600">Deact:</span> {game.ps4_deactivated_discount || game.ps4_deactivated_price || 'N/A'}</span>}
-                                {!game.ps5_price && !game.ps4_price && game.price && <span><span className="font-black text-black">Gen Act:</span> {game.discount_price || game.price} | <span className="font-black text-gray-600">Deact:</span> {game.deactivated_discount || game.deactivated_price || 'N/A'}</span>}
-                              </div>
-                            </td>
-                            <td className="p-4 flex justify-end gap-2">
-                              <button onClick={() => handleEditGameClick(game)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"><Edit className="h-4 w-4" /></button>
-                              <button onClick={() => handleDeleteGame(game.id)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"><Trash2 className="h-4 w-4" /></button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-sm md:text-base text-gray-900 truncate max-w-[200px] md:max-w-xs">{game.name}</span>
+                                  <div className="text-[10px] text-gray-400 mt-0.5 hidden md:block">
+                                    {game.collections?.filter(t => t !== "PS5 Games" && t !== "PS4 Games").join(', ')}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <div className="flex flex-col gap-1 text-[11px] md:text-xs font-semibold text-gray-800">
+                                  {Boolean(game.ps5_price) && <span><span className="font-black text-black">PS5 Act:</span> {game.ps5_discount_price || game.ps5_price} | <span className="font-black text-gray-600">Deact:</span> {game.ps5_deactivated_discount || game.ps5_deactivated_price || 'N/A'}</span>}
+                                  {Boolean(game.ps4_price) && <span><span className="font-black text-black">PS4 Act:</span> {game.ps4_discount_price || game.ps4_price} | <span className="font-black text-gray-600">Deact:</span> {game.ps4_deactivated_discount || game.ps4_deactivated_price || 'N/A'}</span>}
+                                  {!game.ps5_price && !game.ps4_price && Boolean(game.price) && <span><span className="font-black text-black">Gen Act:</span> {game.discount_price || game.price} | <span className="font-black text-gray-600">Deact:</span> {game.deactivated_discount || game.deactivated_price || 'N/A'}</span>}
+                                </div>
+                              </td>
+                              <td className="p-4 flex justify-end gap-2">
+                                <button onClick={() => handleEditGameClick(game)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"><Edit className="h-4 w-4" /></button>
+                                <button onClick={() => handleDeleteGame(game.id)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"><Trash2 className="h-4 w-4" /></button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => handlePageChange(currentPage - 1)} 
+                          disabled={currentPage === 1}
+                          className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-bold disabled:opacity-50 hover:bg-gray-200 transition-colors"
+                        >
+                          Previous
+                        </button>
+                        <span className="text-sm font-bold text-gray-600">
+                          Page {currentPage} of {totalPages}
+                        </span>
+                        <button 
+                          onClick={() => handlePageChange(currentPage + 1)} 
+                          disabled={currentPage === totalPages}
+                          className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-bold disabled:opacity-50 hover:bg-gray-200 transition-colors"
+                        >
+                          Next
+                        </button>
+                      </div>
+                      <form onSubmit={handleJumpPage} className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-gray-600">Go to:</span>
+                        <input 
+                          type="number" 
+                          min="1" 
+                          max={totalPages}
+                          value={jumpPageInput}
+                          onChange={(e) => setJumpPageInput(e.target.value)}
+                          className="w-16 px-2 py-1.5 rounded-lg border border-gray-300 text-center text-sm font-bold outline-none focus:border-black"
+                        />
+                        <button type="submit" className="px-3 py-1.5 rounded-lg bg-black text-white font-bold text-sm hover:bg-gray-800 transition-colors">
+                          Go
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
