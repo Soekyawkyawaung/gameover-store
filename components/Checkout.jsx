@@ -5,7 +5,7 @@ import { UploadCloud, Loader2, CheckCircle, Receipt, Check, FileText, X } from '
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
-const Checkout = ({ promotedGamesIds = {} }) => {
+const Checkout = ({ promotedGamesIds = {}, onGoToOrders }) => {
   const [cartItems, setCartItems] = useState([]);
   const [totalPrice, setTotalPrice] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -180,6 +180,18 @@ const Checkout = ({ promotedGamesIds = {} }) => {
         <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
           We are checking your payment. You can track your status in the "My Orders" menu.
         </p>
+        
+        {/* --- NEW BUTTON: BACK TO ORDERS --- */}
+        <button 
+          onClick={() => {
+            if (onGoToOrders) onGoToOrders();
+            else window.location.reload(); 
+          }}
+          className="mt-8 rounded-xl bg-black dark:bg-white px-8 py-3.5 font-bold text-white dark:text-black shadow-lg shadow-gray-500/30 dark:shadow-none hover:bg-gray-800 dark:hover:bg-gray-200 active:scale-95 transition-all"
+        >
+          View My Orders
+        </button>
+
       </div>
     );
   }

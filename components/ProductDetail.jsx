@@ -124,14 +124,26 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     } catch (error) { toast.error("An error occurred"); } finally { setIsWishlistLoading(false); }
   };
 
-  const handleAddToCart = async () => {
+  // --- SMART CART LOGIC WITH BUY NOW FIX ---
+  const handleAddToCart = async (isBuyNowAction = false) => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return toast.error("Please sign in to add to cart");
+    if (!session) {
+      toast.error("Please sign in first");
+      return false;
+    }
 
-    if (isOutOfStock) return toast.error("Sorry, this item is out of stock!");
+    if (isOutOfStock) {
+      toast.error("Sorry, this item is out of stock!");
+      return false;
+    }
 
     setIsAddingCart(true);
     try {
+      // IF IT IS A "BUY NOW" ACTION, CLEAR THE CART FIRST!
+      if (isBuyNowAction) {
+        await supabase.from('cart').delete().eq('user_id', session.user.id);
+      }
+
       const cartData = {
         user_id: session.user.id,
         game_id: !isGiftCard ? game.id : null,
@@ -147,7 +159,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
       
       const { data: existingCart } = await existingQuery.maybeSingle();
       
-      if (existingCart) {
+      if (existingCart && !isBuyNowAction) {
         await supabase.from('cart').update({ quantity: existingCart.quantity + (isGiftCard ? quantity : 1) }).eq('id', existingCart.id);
         triggerHaptic([50, 50, 50]);
         toast.success("Cart updated!");
@@ -155,17 +167,27 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
         const { error } = await supabase.from('cart').insert([cartData]);
         if (error) throw error;
         triggerHaptic([50, 50, 50]);
-        toast.success("Added to Cart!");
+        if (!isBuyNowAction) toast.success("Added to Cart!");
       }
       window.dispatchEvent(new Event('cartUpdated'));
-    } catch (error) { toast.error("Failed to add to cart"); } finally { setIsAddingCart(false); }
+      return true;
+    } catch (error) { 
+      toast.error("Failed to process request"); 
+      return false;
+    } finally { 
+      setIsAddingCart(false); 
+    }
   };
 
   const handleBuyNow = async () => {
     if (isOutOfStock) return toast.error("Sorry, this item is out of stock!");
-    await handleAddToCart();
-    triggerHaptic([50, 50, 50]);
-    onBuyNow();
+    
+    // Pass "true" to trigger the cart-clearing logic before adding the item
+    const success = await handleAddToCart(true); 
+    if (success) {
+      triggerHaptic([50, 50, 50]);
+      onBuyNow();
+    }
   };
 
   const handleShare = async () => {
@@ -409,7 +431,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
         </div>
         
         <div className="flex gap-3">
-          <button onClick={handleAddToCart} disabled={isAddingCart || (isGiftCard && !selectedOption) || isOutOfStock} className="flex items-center justify-center w-14 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white font-bold active:scale-95 transition-transform disabled:opacity-50">
+          <button onClick={() => handleAddToCart(false)} disabled={isAddingCart || (isGiftCard && !selectedOption) || isOutOfStock} className="flex items-center justify-center w-14 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white font-bold active:scale-95 transition-transform disabled:opacity-50">
             <ShoppingCart className="h-5 w-5" />
           </button>
           <button onClick={handleBuyNow} disabled={(isGiftCard && !selectedOption) || isOutOfStock} className={`flex-1 items-center justify-center rounded-xl text-white dark:text-black font-black py-3.5 shadow-lg active:scale-95 transition-transform disabled:opacity-50 ${isOutOfStock ? 'bg-gray-300 dark:bg-gray-700 shadow-none cursor-not-allowed text-gray-500 dark:text-gray-400' : 'bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200'}`}>
