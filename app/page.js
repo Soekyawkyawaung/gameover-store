@@ -76,6 +76,7 @@ export default function Home() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [selectedGame, setSelectedGame] = useState(null);
+  const [checkoutOrigin, setCheckoutOrigin] = useState('cart');
 
   // --- NEW SEARCH STATES ---
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -381,12 +382,27 @@ export default function Home() {
         {showAuth && <Auth onClose={() => setShowAuth(false)} />}
         
         <main className="w-full">
-          {currentView === 'profile' && <Profile onBack={() => setCurrentView('store')} />}
-          {currentView === 'cart' && <Cart onBack={() => setCurrentView('store')} onCheckout={() => setCurrentView('checkout')} promotedGamesIds={promotedGamesIds} />}
-          {currentView === 'wishlist' && <Wishlist onBack={() => setCurrentView('store')} onGameClick={handleGameClick} />}
-          {currentView === 'orders' && <MyOrders onBack={() => setCurrentView('store')} />}
-          {currentView === 'checkout' && <div className="animate-in slide-in-from-right duration-300 bg-white dark:bg-[#121212] min-h-screen pt-4"><button onClick={() => setCurrentView('cart')} className="mx-4 mb-2 text-sm font-bold text-blue-600 hover:underline">← Back to Cart</button><Checkout promotedGamesIds={promotedGamesIds} /></div>}
-          {currentView === 'details' && selectedGame && <ProductDetail game={selectedGame} allGames={[...games, ...giftCards]} onBack={() => setCurrentView('store')} onBuyNow={() => checkAuthAndNavigate('checkout')} onGameClick={handleGameClick} promoPrice={promotedGamesIds[selectedGame.id]} />}
+          {currentView === 'profile' && <Profile onBack={() => { triggerHaptic(30); setCurrentView('store'); }} />}
+          
+          {currentView === 'cart' && <Cart onBack={() => { triggerHaptic(30); setCurrentView('store'); }} onCheckout={() => { triggerHaptic(30); setCheckoutOrigin('cart'); setCurrentView('checkout'); }} promotedGamesIds={promotedGamesIds} />}
+          
+          {currentView === 'wishlist' && <Wishlist onBack={() => { triggerHaptic(30); setCurrentView('store'); }} onGameClick={handleGameClick} />}
+          
+          {currentView === 'orders' && <MyOrders onBack={() => { triggerHaptic(30); setCurrentView('store'); }} />}
+          
+          {currentView === 'checkout' && (
+            <div className="animate-in slide-in-from-right duration-300 bg-white dark:bg-[#121212] min-h-screen pt-4">
+              <button 
+                onClick={() => setCurrentView(checkoutOrigin === 'details' ? 'details' : 'cart')} 
+                className="mx-4 mb-2 text-sm font-bold text-blue-600 dark:text-blue-400 hover:underline active:scale-95 transition-transform"
+              >
+                ← {checkoutOrigin === 'details' ? 'Back' : 'Back to Cart'}
+              </button>
+              <Checkout promotedGamesIds={promotedGamesIds} onGoToOrders={() => setCurrentView('orders')} />
+            </div>
+          )}
+          
+          {currentView === 'details' && selectedGame && <ProductDetail game={selectedGame} allGames={[...games, ...giftCards]} onBack={() => { triggerHaptic(30); setCurrentView('store'); }} onBuyNow={() => { setCheckoutOrigin('details'); checkAuthAndNavigate('checkout'); }} onGameClick={handleGameClick} promoPrice={promotedGamesIds[selectedGame.id]} />}
           
           {/* --- SEE ALL GRID --- */}
           {currentView === 'seeAll' && (
