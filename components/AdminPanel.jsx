@@ -847,7 +847,7 @@ const AdminPanel = ({ onBackToStore }) => {
                     ) : (
                       filteredOrders.map(order => (
                         <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="p-4 font-bold text-sm">{order.order_no}</td>
+                          <td className="p-4 font-black text-sm text-gray-900 dark:text-white">{order.order_no}</td>
                           <td className="p-4 text-sm font-semibold text-gray-800">{order.customer_name || 'N/A'}</td>
                           <td className="p-4 text-sm text-gray-600">
                             {new Date(order.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -886,19 +886,39 @@ const AdminPanel = ({ onBackToStore }) => {
                     <ul className="list-disc pl-5 text-sm font-semibold text-gray-900 mb-6">
                       {selectedOrder.items.map((i, idx) => <li key={idx} className="mb-1">{i.name} {i.account_type && i.account_type !== 'Game' ? `(${i.account_type})` : ''} - {i.price} MMK (Qty: {i.quantity || 1})</li>)}
                     </ul>
-                    <form onSubmit={handleUpdateOrder} className="flex flex-col gap-4">
+                   <form onSubmit={handleUpdateOrder} className="flex flex-col gap-4">
+                      
+                      {/* --- NEW SEPARATED PAYMENT METHOD BOX --- */}
+                      <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30 mb-2">
+                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest block mb-1">Customer Paid Via</span>
+                        <span className="text-base font-black text-gray-900 dark:text-white">
+                          {selectedOrder.delivery_info?.includes('Payment Method Used:') 
+                            ? selectedOrder.delivery_info.split('Payment Method Used:')[1].trim() 
+                            : 'Already Verified / See Receipt'}
+                        </span>
+                      </div>
+
                       <div>
                         <label className="block text-sm font-bold text-gray-700 mb-2">Payment Status</label>
-                        <select name="status" defaultValue={selectedOrder.status} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none">
+                        <select name="status" defaultValue={selectedOrder.status} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none font-semibold">
                           <option value="pending">Pending (Awaiting Payment)</option>
                           <option value="paid">Paid (Money Received)</option>
                         </select>
                       </div>
                       <div>
                         <label className="block text-sm font-bold text-gray-700 mb-2">Redeem Code / Account Details to Send to User</label>
-                        <textarea name="deliveryInfo" defaultValue={selectedOrder.delivery_info || ''} rows="4" className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none placeholder-gray-400" placeholder="Type the game code or account password here..."></textarea>
+                        {/* --- THIS TEXTAREA IS NOW CLEANED OF THE PAYMENT INFO --- */}
+                        <textarea 
+                          name="deliveryInfo" 
+                          defaultValue={selectedOrder.delivery_info?.includes('Payment Method Used:') ? selectedOrder.delivery_info.split('Payment Method Used:')[0].trim() : (selectedOrder.delivery_info || '')} 
+                          rows="4" 
+                          className="w-full rounded-xl border border-gray-300 px-4 py-3 text-gray-900 outline-none placeholder-gray-400" 
+                          placeholder="Type the game code or account password here..."
+                        ></textarea>
                       </div>
-                      <button type="submit" className="mt-2 w-full md:w-auto rounded-xl bg-black px-6 py-3 font-bold text-white hover:bg-gray-800">Save & Notify User</button>
+                      <button type="submit" className="mt-2 w-full md:w-auto rounded-xl bg-black px-6 py-3 font-bold text-white hover:bg-gray-800 transition-colors active:scale-95">
+                        Save & Notify User
+                      </button>
                     </form>
                   </div>
                   <div>
