@@ -847,7 +847,7 @@ const AdminPanel = ({ onBackToStore }) => {
                     ) : (
                       filteredOrders.map(order => (
                         <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="p-4 font-black text-sm text-gray-900 dark:text-white">{order.order_no}</td>
+                          <td className="p-4 font-black text-sm text-black">{order.order_no}</td>
                           <td className="p-4 text-sm font-semibold text-gray-800">{order.customer_name || 'N/A'}</td>
                           <td className="p-4 text-sm text-gray-600">
                             {new Date(order.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
