@@ -267,6 +267,7 @@ const AdminPanel = ({ onBackToStore }) => {
       
       const numFields = ['price', 'discount_price', 'activated_stock', 'deactivated_price', 'deactivated_discount', 'deactivated_stock', 'ps4_price', 'ps4_discount_price', 'ps4_stock', 'ps4_deactivated_price', 'ps4_deactivated_discount', 'ps4_deactivated_stock', 'ps5_price', 'ps5_discount_price', 'ps5_stock', 'ps5_deactivated_price', 'ps5_deactivated_discount', 'ps5_deactivated_stock'];
       numFields.forEach(field => {
+        // DEFAULT TO 0 INSTEAD OF NULL TO PREVENT DATABASE CRASHES
         gamePayload[field] = gamePayload[field] ? Number(gamePayload[field]) : 0; 
       });
 
@@ -479,24 +480,24 @@ const AdminPanel = ({ onBackToStore }) => {
   };
 
   const renderPricingBlock = (title, prefix, stateObj, isEditing) => (
-    <div className="col-span-1 md:col-span-2 border-t border-gray-200 dark:border-gray-800 pt-6 mt-4">
-      <h3 className="text-sm font-black text-gray-900 dark:text-white mb-4 uppercase tracking-widest bg-gray-100 dark:bg-gray-800 py-2 px-3 rounded-lg inline-block">{title}</h3>
+    <div className="col-span-1 md:col-span-2 border-t border-gray-200 pt-6 mt-4">
+      <h3 className="text-sm font-black text-gray-900 mb-4 uppercase tracking-widest bg-gray-100 py-2 px-3 rounded-lg inline-block">{title}</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-green-50/50 dark:bg-green-900/10 p-5 rounded-2xl border border-green-100 dark:border-green-900/20">
-          <h4 className="text-xs font-bold text-green-700 dark:text-green-500 mb-4 uppercase">Activated Account</h4>
+        <div className="bg-green-50/50 p-5 rounded-2xl border border-green-100">
+          <h4 className="text-xs font-bold text-green-700 mb-4 uppercase">Activated Account</h4>
           <div className="flex flex-col gap-3">
-            <input type="number" placeholder="Regular Price" value={stateObj[`${prefix}price`] || ''} onChange={(e) => isEditing ? setEditingGame({...editingGame, [`${prefix}price`]: e.target.value}) : setNewGame({...newGame, [`${prefix}price`]: e.target.value})} className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#121212] px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-black dark:focus:border-white" />
-            <input type="number" placeholder="Discount Price (Optional)" value={stateObj[`${prefix}discount_price`] || ''} onChange={(e) => isEditing ? setEditingGame({...editingGame, [`${prefix}discount_price`]: e.target.value}) : setNewGame({...newGame, [`${prefix}discount_price`]: e.target.value})} className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#121212] px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-black dark:focus:border-white" />
-            <input type="number" placeholder="Stock Quantity" value={stateObj[`${prefix}stock`] || ''} onChange={(e) => isEditing ? setEditingGame({...editingGame, [`${prefix}stock`]: e.target.value}) : setNewGame({...newGame, [`${prefix}stock`]: e.target.value})} className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#121212] px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-black dark:focus:border-white" />
+            <input type="number" placeholder="Regular Price" value={stateObj[`${prefix}price`] || ''} onChange={(e) => isEditing ? setEditingGame({...editingGame, [`${prefix}price`]: e.target.value}) : setNewGame({...newGame, [`${prefix}price`]: e.target.value})} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-black" />
+            <input type="number" placeholder="Discount Price (Optional)" value={stateObj[`${prefix}discount_price`] || ''} onChange={(e) => isEditing ? setEditingGame({...editingGame, [`${prefix}discount_price`]: e.target.value}) : setNewGame({...newGame, [`${prefix}discount_price`]: e.target.value})} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-black" />
+            <input type="number" placeholder="Stock Quantity" value={stateObj[`${prefix}stock`] || ''} onChange={(e) => isEditing ? setEditingGame({...editingGame, [`${prefix}stock`]: e.target.value}) : setNewGame({...newGame, [`${prefix}stock`]: e.target.value})} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-black" />
           </div>
         </div>
         
-        <div className="bg-orange-50/50 dark:bg-orange-900/10 p-5 rounded-2xl border border-orange-100 dark:border-orange-900/20">
-          <h4 className="text-xs font-bold text-orange-700 dark:text-orange-500 mb-4 uppercase">Deactivated Account (Optional)</h4>
+        <div className="bg-orange-50/50 p-5 rounded-2xl border border-orange-100">
+          <h4 className="text-xs font-bold text-orange-700 mb-4 uppercase">Deactivated Account (Optional)</h4>
           <div className="flex flex-col gap-3">
-            <input type="number" placeholder="Regular Price" value={stateObj[`${prefix}deactivated_price`] || ''} onChange={(e) => isEditing ? setEditingGame({...editingGame, [`${prefix}deactivated_price`]: e.target.value}) : setNewGame({...newGame, [`${prefix}deactivated_price`]: e.target.value})} className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#121212] px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-black dark:focus:border-white" />
-            <input type="number" placeholder="Discount Price (Optional)" value={stateObj[`${prefix}deactivated_discount`] || ''} onChange={(e) => isEditing ? setEditingGame({...editingGame, [`${prefix}deactivated_discount`]: e.target.value}) : setNewGame({...newGame, [`${prefix}deactivated_discount`]: e.target.value})} className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#121212] px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-black dark:focus:border-white" />
-            <input type="number" placeholder="Stock Quantity" value={stateObj[`${prefix}deactivated_stock`] || ''} onChange={(e) => isEditing ? setEditingGame({...editingGame, [`${prefix}deactivated_stock`]: e.target.value}) : setNewGame({...newGame, [`${prefix}deactivated_stock`]: e.target.value})} className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#121212] px-4 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-black dark:focus:border-white" />
+            <input type="number" placeholder="Regular Price" value={stateObj[`${prefix}deactivated_price`] || ''} onChange={(e) => isEditing ? setEditingGame({...editingGame, [`${prefix}deactivated_price`]: e.target.value}) : setNewGame({...newGame, [`${prefix}deactivated_price`]: e.target.value})} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-black" />
+            <input type="number" placeholder="Discount Price (Optional)" value={stateObj[`${prefix}deactivated_discount`] || ''} onChange={(e) => isEditing ? setEditingGame({...editingGame, [`${prefix}deactivated_discount`]: e.target.value}) : setNewGame({...newGame, [`${prefix}deactivated_discount`]: e.target.value})} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-black" />
+            <input type="number" placeholder="Stock Quantity" value={stateObj[`${prefix}deactivated_stock`] || ''} onChange={(e) => isEditing ? setEditingGame({...editingGame, [`${prefix}deactivated_stock`]: e.target.value}) : setNewGame({...newGame, [`${prefix}deactivated_stock`]: e.target.value})} className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-black" />
           </div>
         </div>
       </div>
@@ -551,7 +552,7 @@ const AdminPanel = ({ onBackToStore }) => {
     }
   };
 
-  if (isLoading) return <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-[#0a0a0a]"><Loader2 className="h-10 w-10 animate-spin text-black dark:text-white" /></div>;
+  if (isLoading) return <div className="flex min-h-screen items-center justify-center bg-gray-50"><Loader2 className="h-10 w-10 animate-spin text-black" /></div>;
 
   return (
     <div className="flex h-screen w-full bg-gray-50 font-sans relative overflow-hidden">
@@ -913,9 +914,9 @@ const AdminPanel = ({ onBackToStore }) => {
                     </ul>
                    <form onSubmit={handleUpdateOrder} className="flex flex-col gap-4">
                       
-                      <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30 mb-2">
-                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest block mb-1">Customer Paid Via</span>
-                        <span className="text-base font-black text-gray-900 dark:text-white">
+                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-2">
+                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest block mb-1">Customer Paid Via</span>
+                        <span className="text-base font-black text-gray-900">
                           {selectedOrder.delivery_info?.includes('Payment Method Used:') 
                             ? selectedOrder.delivery_info.split('Payment Method Used:')[1].trim() 
                             : 'Already Verified / See Receipt'}
@@ -980,21 +981,24 @@ const AdminPanel = ({ onBackToStore }) => {
                 <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-black" /></div>
               ) : (
                 <>
-                  <div className="bg-white dark:bg-[#121212] rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 overflow-x-auto hide-scrollbar">
-                    <table className="w-full text-left border-collapse whitespace-nowrap md:whitespace-normal">
-                      <thead>
-                        <tr className="bg-gray-50 dark:bg-[#0a0a0a] border-b border-gray-200 dark:border-gray-800 text-sm text-gray-500 dark:text-gray-400">
+                  <div 
+                    className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto [&::-webkit-scrollbar]:hidden"
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                  >
+                    <table className="w-full text-left border-collapse whitespace-nowrap md:whitespace-normal bg-white">
+                      <thead className="bg-gray-50">
+                        <tr className="border-b border-gray-200 text-sm text-gray-500">
                           <th className="p-4 font-semibold">Game</th>
                           <th className="p-4 font-semibold">Platform & Price</th>
                           <th className="p-4 font-semibold text-right">Actions</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="bg-white">
                         {currentGames.length === 0 ? (
                           <tr><td colSpan="3" className="p-8 text-center text-gray-500">No games match your search.</td></tr>
                         ) : (
                           currentGames.map(game => (
-                            <tr key={game.id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <tr key={game.id} className="border-b border-gray-100 hover:bg-gray-50 bg-white transition-colors">
                               <td className="p-4 flex items-center gap-3 md:gap-4">
                                 <div className="h-10 w-10 md:h-12 md:w-12 rounded object-cover overflow-hidden bg-gray-100 border border-gray-100 relative group flex-shrink-0">
                                   <img src={game.cover_image} alt={game.name} className="h-full w-full object-cover transition-transform group-hover:scale-110" />
@@ -1027,7 +1031,7 @@ const AdminPanel = ({ onBackToStore }) => {
                     </table>
                   </div>
 
-                 {totalPages > 1 && (
+                  {totalPages > 1 && (
                     <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                       <div className="flex items-center gap-2">
                         <button 
@@ -1229,18 +1233,15 @@ const AdminPanel = ({ onBackToStore }) => {
                   <PlusCircle className="h-5 w-5" /> Add Gift Card
                 </button>
               </div>
-              <div 
-                    className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto [&::-webkit-scrollbar]:hidden"
-                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                  >
-                    <table className="w-full text-left border-collapse whitespace-nowrap md:whitespace-normal">
-                      <thead>
-                        <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
-                          <th className="p-4 font-semibold">Game</th>
-                          <th className="p-4 font-semibold">Platform & Price</th>
-                          <th className="p-4 font-semibold text-right">Actions</th>
-                        </tr>
-                      </thead>
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto">
+                <table className="w-full text-left border-collapse whitespace-nowrap md:whitespace-normal">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
+                      <th className="p-4 font-semibold">Card Name</th>
+                      <th className="p-4 font-semibold">Denomination Options</th>
+                      <th className="p-4 font-semibold text-right">Actions</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {giftCards.map(gift => (
                       <tr key={gift.id} className="border-b border-gray-100 hover:bg-gray-50">
