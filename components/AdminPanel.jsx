@@ -96,6 +96,42 @@ const AdminPanel = ({ onBackToStore }) => {
     }
   }, [games]);
 
+  // --- REALTIME BROWSER NOTIFICATIONS ---
+  useEffect(() => {
+    // 1. Request permission from the browser
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission();
+      }
+    }
+
+    // 2. Listen for NEW ORDERS in real-time
+    const orderSubscription = supabase
+      .channel('admin-order-alerts')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
+        
+        // Play notification sound
+        const audio = new Audio('/notification-ding.mp3');
+        audio.play().catch(e => console.log("Audio play blocked by browser"));
+
+        // Show Desktop Notification
+        if (Notification.permission === 'granted') {
+          new Notification('New Order Received! 🎮', {
+            body: `Order ${payload.new.order_no} placed for ${payload.new.total_price?.toLocaleString()} MMK.`,
+            icon: '/logo.jpg', 
+          });
+        }
+        
+        // Refresh the admin dashboard data automatically
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(orderSubscription);
+    };
+  }, []);
+
   const fetchData = async () => {
     setIsLoading(true);
     try {
@@ -227,8 +263,8 @@ const AdminPanel = ({ onBackToStore }) => {
       
       const numFields = ['price', 'discount_price', 'activated_stock', 'deactivated_price', 'deactivated_discount', 'deactivated_stock', 'ps4_price', 'ps4_discount_price', 'ps4_stock', 'ps4_deactivated_price', 'ps4_deactivated_discount', 'ps4_deactivated_stock', 'ps5_price', 'ps5_discount_price', 'ps5_stock', 'ps5_deactivated_price', 'ps5_deactivated_discount', 'ps5_deactivated_stock'];
       numFields.forEach(field => {
-        gamePayload[field] = gamePayload[field] ? Number(gamePayload[field]) : null;
-        if (field.includes('stock') && !gamePayload[field]) gamePayload[field] = 0; // Default stock to 0
+        // DEFAULT TO 0 INSTEAD OF NULL TO PREVENT DATABASE CRASHES
+        gamePayload[field] = gamePayload[field] ? Number(gamePayload[field]) : 0; 
       });
 
       if (!gamePayload.release_date) gamePayload.release_date = null;
@@ -258,7 +294,6 @@ const AdminPanel = ({ onBackToStore }) => {
       if (isPS4) collectionsArray.push("PS4 Games");
       gamePayload.collections = [...new Set(collectionsArray)]; 
 
-      // --- THIS IS THE FIX: Properly check and throw errors ---
       if (isEditing) {
         const { error } = await supabase.from('games').update(gamePayload).eq('id', editingGame.id);
         if (error) throw error;
