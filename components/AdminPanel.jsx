@@ -1027,38 +1027,38 @@ const AdminPanel = ({ onBackToStore }) => {
                     </table>
                   </div>
 
-                  {totalPages > 1 && (
-                    <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-[#121212] p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+                 {totalPages > 1 && (
+                    <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                       <div className="flex items-center gap-2">
                         <button 
                           onClick={() => handlePageChange(currentPage - 1)} 
                           disabled={currentPage === 1}
-                          className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold disabled:opacity-50 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                          className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-bold disabled:opacity-50 hover:bg-gray-200 transition-colors"
                         >
                           Previous
                         </button>
-                        <span className="text-sm font-bold text-gray-600 dark:text-gray-400">
+                        <span className="text-sm font-bold text-gray-600">
                           Page {currentPage} of {totalPages}
                         </span>
                         <button 
                           onClick={() => handlePageChange(currentPage + 1)} 
                           disabled={currentPage === totalPages}
-                          className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold disabled:opacity-50 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                          className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-bold disabled:opacity-50 hover:bg-gray-200 transition-colors"
                         >
                           Next
                         </button>
                       </div>
                       <form onSubmit={handleJumpPage} className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-gray-600 dark:text-gray-400">Go to:</span>
+                        <span className="text-sm font-bold text-gray-600">Go to:</span>
                         <input 
                           type="number" 
                           min="1" 
                           max={totalPages}
                           value={jumpPageInput}
                           onChange={(e) => setJumpPageInput(e.target.value)}
-                          className="w-16 px-2 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-center text-sm font-bold text-gray-900 dark:text-white outline-none focus:border-black dark:focus:border-white"
+                          className="w-16 px-2 py-1.5 rounded-lg border border-gray-300 bg-white text-center text-sm font-bold text-gray-900 outline-none focus:border-black"
                         />
-                        <button type="submit" className="px-3 py-1.5 rounded-lg bg-black dark:bg-white text-white dark:text-black font-bold text-sm hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors active:scale-95">
+                        <button type="submit" className="px-3 py-1.5 rounded-lg bg-black text-white font-bold text-sm hover:bg-gray-800 transition-colors active:scale-95">
                           Go
                         </button>
                       </form>
@@ -1229,15 +1229,18 @@ const AdminPanel = ({ onBackToStore }) => {
                   <PlusCircle className="h-5 w-5" /> Add Gift Card
                 </button>
               </div>
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto">
-                <table className="w-full text-left border-collapse whitespace-nowrap md:whitespace-normal">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
-                      <th className="p-4 font-semibold">Card Name</th>
-                      <th className="p-4 font-semibold">Denomination Options</th>
-                      <th className="p-4 font-semibold text-right">Actions</th>
-                    </tr>
-                  </thead>
+              <div 
+                    className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto [&::-webkit-scrollbar]:hidden"
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                  >
+                    <table className="w-full text-left border-collapse whitespace-nowrap md:whitespace-normal">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500">
+                          <th className="p-4 font-semibold">Game</th>
+                          <th className="p-4 font-semibold">Platform & Price</th>
+                          <th className="p-4 font-semibold text-right">Actions</th>
+                        </tr>
+                      </thead>
                   <tbody>
                     {giftCards.map(gift => (
                       <tr key={gift.id} className="border-b border-gray-100 hover:bg-gray-50">
