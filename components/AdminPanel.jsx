@@ -14,7 +14,7 @@ const AdminPanel = ({ onBackToStore }) => {
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const ADMIN_EMAIL = 'phyephyo.gameover@gmail.com';
+ const ADMIN_EMAIL = 'pyaephyo.gameover@gmail.com';
 
   const [activeTab, setActiveTab] = useState('orders'); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
