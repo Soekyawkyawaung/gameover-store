@@ -1,11 +1,21 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Edit2, Trash2, Save, X, Image as ImageIcon, UploadCloud, Loader2, Tag, Percent, Ticket, ShoppingBag, Package, Calendar, ShieldAlert, Gamepad2, CreditCard, Menu, Tags, CalendarClock, Wand2, LogOut, PlusCircle, Edit, Search, Filter } from 'lucide-react';
+import { ArrowLeft, Plus, Edit2, Trash2, Save, X, Image as ImageIcon, UploadCloud, Loader2, Tag, Percent, Ticket, ShoppingBag, Package, Calendar, ShieldAlert, Gamepad2, CreditCard, Menu, Tags, CalendarClock, Wand2, LogOut, PlusCircle, Edit, Search, Filter, Mail, Key, Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
 const AdminPanel = ({ onBackToStore }) => {
+  // --- SECURE AUTHENTICATION STATES ---
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const ADMIN_EMAIL = 'phyephyo.gameover@gmail.com';
+
   const [activeTab, setActiveTab] = useState('orders'); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
   const [isLoading, setIsLoading] = useState(true);
@@ -54,7 +64,6 @@ const AdminPanel = ({ onBackToStore }) => {
   const [isPS5, setIsPS5] = useState(false);
   const [isPS4, setIsPS4] = useState(false);
   const [uniqueCollections, setUniqueCollections] = useState([]);
-  const quickTags = ["Action-Adventure", "Role playing games", "Shooter", "Adventure", "Horror", "Action", "Fighting", "Party", "New Games", "Strategy", "Pre-orders", "Racing", "Driving", "Sports"];
   const [descLanguage, setDescLanguage] = useState('en');
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
 
@@ -88,27 +97,24 @@ const AdminPanel = ({ onBackToStore }) => {
   // --- SLIDER STATES ---
   const [sliderFiles, setSliderFiles] = useState({ 1: null, 2: null, 3: null, 4: null, 5: null });
 
+  // 1. CHECK SESSION ON MOUNT
   useEffect(() => {
-    fetchData();
+    const checkAdminSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.email === ADMIN_EMAIL) {
+        setIsAuthenticated(true);
+      }
+      setAuthLoading(false);
+    };
+    checkAdminSession();
   }, []);
 
+  // 2. FETCH DATA ONLY IF AUTHENTICATED
   useEffect(() => {
-    if (games.length > 0) {
-      const allTags = games.flatMap(g => g.collections || []);
-      const textTags = allTags.filter(t => t !== "PS5 Games" && t !== "PS4 Games");
-      const unique = [...new Set(textTags)];
-      setUniqueCollections(unique);
-    }
-  }, [games]);
+    if (!isAuthenticated) return;
+    
+    fetchData();
 
-  // Reset pagination to Page 1 when the user types in the search bar
-  useEffect(() => {
-    setCurrentPage(1);
-    setJumpPageInput('1');
-  }, [gameSearch]);
-
-  // --- REALTIME BROWSER NOTIFICATIONS ---
-  useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission();
@@ -134,7 +140,60 @@ const AdminPanel = ({ onBackToStore }) => {
     return () => {
       supabase.removeChannel(orderSubscription);
     };
-  }, []);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (games.length > 0) {
+      const allTags = games.flatMap(g => g.collections || []);
+      const textTags = allTags.filter(t => t !== "PS5 Games" && t !== "PS4 Games");
+      const unique = [...new Set(textTags)];
+      setUniqueCollections(unique);
+    }
+  }, [games]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    setJumpPageInput('1');
+  }, [gameSearch]);
+
+  // --- SECURE LOGIN HANDLER ---
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+    setLoginError('');
+
+    try {
+      if (loginEmail.toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+         throw new Error("Unauthorized: This email does not have admin privileges.");
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword,
+      });
+
+      if (error) throw error;
+
+      if (data?.user?.email === ADMIN_EMAIL) {
+        setIsAuthenticated(true);
+        toast.success("Welcome back, Admin!");
+      } else {
+        await supabase.auth.signOut();
+        throw new Error("Unauthorized Access.");
+      }
+    } catch (error) {
+      setLoginError(error.message);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setIsAuthenticated(false);
+    onBackToStore();
+  };
+
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -267,7 +326,6 @@ const AdminPanel = ({ onBackToStore }) => {
       
       const numFields = ['price', 'discount_price', 'activated_stock', 'deactivated_price', 'deactivated_discount', 'deactivated_stock', 'ps4_price', 'ps4_discount_price', 'ps4_stock', 'ps4_deactivated_price', 'ps4_deactivated_discount', 'ps4_deactivated_stock', 'ps5_price', 'ps5_discount_price', 'ps5_stock', 'ps5_deactivated_price', 'ps5_deactivated_discount', 'ps5_deactivated_stock'];
       numFields.forEach(field => {
-        // DEFAULT TO 0 INSTEAD OF NULL TO PREVENT DATABASE CRASHES
         gamePayload[field] = gamePayload[field] ? Number(gamePayload[field]) : 0; 
       });
 
@@ -513,6 +571,57 @@ const AdminPanel = ({ onBackToStore }) => {
     return platforms.join("");
   };
 
+  // RENDER LOADING SCREEN
+  if (authLoading) return <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a]"><Loader2 className="h-10 w-10 animate-spin text-[#e31818]" /></div>;
+
+  // --- ADMIN LOGIN GATEWAY UI ---
+  if (!isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-4 font-sans relative">
+        <div className="absolute top-4 left-4">
+          <button onClick={onBackToStore} className="flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white transition-colors">
+            <ArrowLeft className="w-4 h-4" /> Back to Store
+          </button>
+        </div>
+        <div className="w-full max-w-md bg-[#121212] border border-gray-800 rounded-3xl shadow-2xl p-8 animate-in zoom-in-95 duration-300">
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-16 h-16 bg-gray-900 border border-gray-800 rounded-2xl flex items-center justify-center mb-4 shadow-inner">
+              <ShieldAlert className="w-8 h-8 text-[#e31818]" />
+            </div>
+            <h1 className="text-2xl font-black text-white tracking-tight">ADMIN GATEWAY</h1>
+            <p className="text-sm font-semibold text-gray-500 mt-1">Restricted Access Only</p>
+          </div>
+
+          <form onSubmit={handleAdminLogin} className="flex flex-col gap-4">
+            {loginError && (
+              <div className="bg-red-900/20 border border-red-900/50 text-red-500 text-xs font-bold p-3 rounded-xl text-center">
+                {loginError}
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Admin Email</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
+                <input type="email" required value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} className="w-full bg-[#1a1a1a] border border-gray-800 text-white rounded-xl pl-12 pr-4 py-3.5 text-sm font-bold outline-none focus:border-[#e31818] transition-colors" placeholder="admin@example.com" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Password</label>
+              <div className="relative">
+                <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-600" />
+                <input type="password" required value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} className="w-full bg-[#1a1a1a] border border-gray-800 text-white rounded-xl pl-12 pr-4 py-3.5 text-sm font-bold outline-none focus:border-[#e31818] transition-colors" placeholder="••••••••" />
+              </div>
+            </div>
+            <button type="submit" disabled={isLoggingIn} className="mt-4 w-full bg-[#e31818] hover:bg-red-700 text-white font-black py-4 rounded-xl flex justify-center items-center gap-2 active:scale-95 transition-all shadow-lg shadow-red-900/20">
+              {isLoggingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Lock className="w-5 h-5" /> VERIFY & ENTER</>}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // --- MAIN ADMIN PANEL UI ---
   const pendingOrdersCount = orders.filter(o => o.status === 'pending').length;
   const filteredOrders = orders.filter(order => {
     const searchLower = orderSearch.toLowerCase();
@@ -593,7 +702,7 @@ const AdminPanel = ({ onBackToStore }) => {
           </button>
         </nav>
         <div className="p-4 border-t border-gray-800">
-          <button onClick={onBackToStore} className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/10 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/20 transition-colors">
+          <button onClick={handleLogout} className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/10 px-4 py-2.5 text-sm font-bold text-white hover:bg-white/20 transition-colors">
             <LogOut className="h-4 w-4" /> Exit Admin
           </button>
         </div>
