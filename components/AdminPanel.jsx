@@ -449,8 +449,17 @@ const AdminPanel = ({ onBackToStore }) => {
     e.preventDefault();
     try {
       const status = e.target.status.value;
-      const deliveryInfo = e.target.deliveryInfo.value;
-      const { error } = await supabase.from('orders').update({ status, delivery_info: deliveryInfo }).eq('id', selectedOrder.id);
+      const newDeliveryText = e.target.deliveryInfo.value;
+      
+      // Preserve the payment method so it doesn't get accidentally deleted!
+      let paymentString = "";
+      if (selectedOrder.delivery_info && selectedOrder.delivery_info.includes('Payment Method Used:')) {
+        paymentString = "\n\nPayment Method Used: " + selectedOrder.delivery_info.split('Payment Method Used:')[1].trim();
+      }
+
+      const finalDeliveryInfo = newDeliveryText.trim() + paymentString;
+
+      const { error } = await supabase.from('orders').update({ status, delivery_info: finalDeliveryInfo }).eq('id', selectedOrder.id);
       if (error) throw error;
       toast.success("Order Updated!");
       setSelectedOrder(null);
@@ -1023,13 +1032,24 @@ const AdminPanel = ({ onBackToStore }) => {
                     </ul>
                    <form onSubmit={handleUpdateOrder} className="flex flex-col gap-4">
                       
-                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-2">
-                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest block mb-1">Customer Paid Via</span>
-                        <span className="text-base font-black text-gray-900">
-                          {selectedOrder.delivery_info?.includes('Payment Method Used:') 
-                            ? selectedOrder.delivery_info.split('Payment Method Used:')[1].trim() 
-                            : 'Already Verified / See Receipt'}
-                        </span>
+                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest block mb-2">Customer Paid Via</span>
+                          {selectedOrder.delivery_info?.includes('Payment Method Used:') ? (
+                            <div className="flex items-center gap-3">
+                              {selectedOrder.delivery_info.toUpperCase().includes('KBZ') ? (
+                                 <img src="/kbz_logo.png" alt="KBZPay" className="h-8 rounded bg-white p-1 border border-gray-200 shadow-sm" />
+                              ) : selectedOrder.delivery_info.toUpperCase().includes('WAVE') ? (
+                                 <img src="/wave_logo.jpg" alt="WavePay" className="h-8 rounded bg-white p-1 border border-gray-200 shadow-sm" />
+                              ) : null}
+                              <span className="text-base font-black text-gray-900">
+                                {selectedOrder.delivery_info.split('Payment Method Used:')[1].trim()}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm font-bold text-gray-500">Already Verified / See Receipt</span>
+                          )}
+                        </div>
                       </div>
 
                       <div>
