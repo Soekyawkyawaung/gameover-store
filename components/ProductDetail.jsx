@@ -24,8 +24,10 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
   
-  // --- NEW: MODAL STATE ---
+  // --- MODAL & SMART SELECTION STATE ---
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [hasExplicitlySelected, setHasExplicitlySelected] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null); // 'cart' | 'buy' | null
 
   // --- HAPTIC FEEDBACK HELPER ---
   const triggerHaptic = (pattern = 50) => {
@@ -39,7 +41,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     if (isGiftCard) return [];
     const accounts = [];
 
-    // PS4 Accounts
     if (game.ps4_price) {
       accounts.push({ id: 'Activated (PS4)', label: 'Activated (PS4)', price: game.ps4_discount_price || game.ps4_price, original: game.ps4_price, stock: game.ps4_stock, promo: promoPrice?.ps4_promo_price });
       if (game.ps4_deactivated_price) {
@@ -47,7 +48,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
       }
     }
 
-    // PS5 Accounts
     if (game.ps5_price) {
       accounts.push({ id: 'Activated (PS5)', label: 'Activated (PS5)', price: game.ps5_discount_price || game.ps5_price, original: game.ps5_price, stock: game.ps5_stock, promo: promoPrice?.ps5_promo_price });
       if (game.ps5_deactivated_price) {
@@ -55,7 +55,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
       }
     }
 
-    // Legacy Fallback
     if (accounts.length === 0 && (game.price || game.discount_price)) {
       accounts.push({ id: 'Activated Account', label: 'Activated Edition', price: game.discount_price || game.price, original: game.price, stock: game.activated_stock, promo: promoPrice?.activated });
       if (game.deactivated_price || game.deactivated_discount) {
@@ -82,6 +81,8 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     setIsGalleryOpen(false);
     setActiveGalleryIndex(0);
     setIsModalOpen(false);
+    setHasExplicitlySelected(false);
+    setPendingAction(null);
 
     if (isGiftCard && game.options && game.options.length > 0) {
       setSelectedOption(prefilledOption || game.options[0]);
@@ -124,8 +125,8 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     } catch (error) { toast.error("An error occurred"); } finally { setIsWishlistLoading(false); }
   };
 
-  // --- SMART CART LOGIC WITH BUY NOW FIX ---
-  const handleAddToCart = async (isBuyNowAction = false) => {
+  // --- SMART CART LOGIC ---
+  const executeAddToCart = async (isBuyNowAction = false) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       toast.error("Please sign in first");
@@ -139,9 +140,12 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
 
     setIsAddingCart(true);
     try {
-      // IF IT IS A "BUY NOW" ACTION, CLEAR THE CART FIRST!
       if (isBuyNowAction) {
-        await supabase.from('cart').delete().eq('user_id', session.user.id);
+        const { data: oldCart } = await supabase.from('cart').select('id').eq('user_id', session.user.id);
+        if (oldCart && oldCart.length > 0) {
+          const idsToDelete = oldCart.map(item => item.id);
+          await supabase.from('cart').delete().in('id', idsToDelete);
+        }
       }
 
       const cartData = {
@@ -179,14 +183,33 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     }
   };
 
-  const handleBuyNow = async () => {
+  const executeBuyNow = async () => {
     if (isOutOfStock) return toast.error("Sorry, this item is out of stock!");
-    
-    // Pass "true" to trigger the cart-clearing logic before adding the item
-    const success = await handleAddToCart(true); 
+    const success = await executeAddToCart(true); 
     if (success) {
       triggerHaptic([50, 50, 50]);
       onBuyNow();
+    }
+  };
+
+  // --- BUTTON CLICK HANDLERS ---
+  const onCartButtonClick = () => {
+    if (isOutOfStock) return toast.error("Sorry, this item is out of stock!");
+    if (!hasExplicitlySelected) {
+        setPendingAction('cart');
+        setIsModalOpen(true);
+    } else {
+        executeAddToCart(false);
+    }
+  };
+
+  const onBuyNowButtonClick = () => {
+    if (isOutOfStock) return toast.error("Sorry, this item is out of stock!");
+    if (!hasExplicitlySelected) {
+        setPendingAction('buy');
+        setIsModalOpen(true);
+    } else {
+        executeBuyNow();
     }
   };
 
@@ -233,6 +256,43 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
       preOrderTag = "PRE-ORDER";
     }
   }
+
+  // --- REUSABLE PLATFORM TAG RENDERER ---
+  const renderPlatformTags = (collections, releaseDate = null) => {
+    if (!collections) return null;
+    let platforms = [];
+    if (collections.includes("PS4 Games")) platforms.push("PS4");
+    if (collections.includes("PS5 Games")) platforms.push("PS5");
+    
+    const preOrder = collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'));
+    let pTag = null;
+    if (preOrder) {
+      if (releaseDate) {
+        const daysToRelease = Math.ceil((new Date(releaseDate) - new Date()) / (1000 * 60 * 60 * 24));
+        if (daysToRelease > 0) pTag = `In ${daysToRelease} Days`;
+        else if (daysToRelease === 0) pTag = "Today!";
+        else pTag = "Available Now"; 
+      } else {
+        pTag = "PRE-ORDER";
+      }
+    }
+
+    if (platforms.length === 0 && !pTag) return null;
+    return (
+      <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 items-start z-10 transition-opacity duration-300">
+        {platforms.length > 0 && (
+          <div className="bg-gray-900/90 backdrop-blur-sm text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm flex gap-1 border border-gray-700/50">
+            {platforms.map(p => <span key={p}>{p}</span>)}
+          </div>
+        )}
+        {pTag && (
+          <div className="bg-orange-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow-sm border border-orange-600 flex gap-1 items-center">
+            {pTag !== "Available Now" && <Tag className="h-2 w-2" />} {pTag}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const activeAccountData = availableAccounts.find(acc => acc.id === accountType);
   const finalPrice = isGiftCard 
@@ -301,7 +361,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
         {/* --- NATIVE APP STYLE ACCOUNT/DENOMINATION SELECTOR --- */}
         <div className="mb-6">
           <button 
-            onClick={() => { triggerHaptic(30); setIsModalOpen(true); }}
+            onClick={() => { triggerHaptic(30); setPendingAction(null); setIsModalOpen(true); }}
             className="w-full flex items-center justify-between p-4 rounded-2xl bg-gray-100 dark:bg-[#1c1c1e] hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors active:scale-[0.98] border border-transparent dark:border-gray-800 shadow-sm"
           >
             <div className="flex flex-col items-start gap-1 text-left flex-1 pr-4">
@@ -404,9 +464,10 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
             {recommendedGames.map(rGame => {
               const rGamePrice = rGame.discount_price || rGame.price || rGame.ps5_discount_price || rGame.ps5_price || rGame.ps4_discount_price || rGame.ps4_price || 0;
               return (
-                <div key={rGame.id} onClick={() => { triggerHaptic(30); onGameClick(rGame); }} className="min-w-[130px] max-w-[130px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform">
+                <div key={rGame.id} onClick={() => { triggerHaptic(30); onGameClick(rGame); }} className="min-w-[130px] max-w-[130px] snap-start flex flex-col gap-2 cursor-pointer active:scale-95 transition-transform group relative">
+                  {renderPlatformTags(rGame.collections, rGame.release_date)}
                   <div className="aspect-square w-full rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-800">
-                    <img src={rGame.cover_image} alt={rGame.name} className="h-full w-full object-cover" />
+                    <img src={rGame.cover_image} alt={rGame.name} className="h-full w-full object-cover group-hover:scale-110 transition-transform" />
                   </div>
                   <div>
                     <h3 className="text-xs font-bold text-gray-900 dark:text-white truncate">{rGame.name}</h3>
@@ -431,10 +492,10 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
         </div>
         
         <div className="flex gap-3">
-          <button onClick={() => handleAddToCart(false)} disabled={isAddingCart || (isGiftCard && !selectedOption) || isOutOfStock} className="flex items-center justify-center w-14 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white font-bold active:scale-95 transition-transform disabled:opacity-50">
+          <button onClick={onCartButtonClick} disabled={isAddingCart || (isGiftCard && !selectedOption) || isOutOfStock} className="flex items-center justify-center w-14 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white font-bold active:scale-95 transition-transform disabled:opacity-50">
             <ShoppingCart className="h-5 w-5" />
           </button>
-          <button onClick={handleBuyNow} disabled={(isGiftCard && !selectedOption) || isOutOfStock} className={`flex-1 items-center justify-center rounded-xl text-white dark:text-black font-black py-3.5 shadow-lg active:scale-95 transition-transform disabled:opacity-50 ${isOutOfStock ? 'bg-gray-300 dark:bg-gray-700 shadow-none cursor-not-allowed text-gray-500 dark:text-gray-400' : 'bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200'}`}>
+          <button onClick={onBuyNowButtonClick} disabled={(isGiftCard && !selectedOption) || isOutOfStock} className={`flex-1 items-center justify-center rounded-xl text-white dark:text-black font-black py-3.5 shadow-lg active:scale-95 transition-transform disabled:opacity-50 ${isOutOfStock ? 'bg-gray-300 dark:bg-gray-700 shadow-none cursor-not-allowed text-gray-500 dark:text-gray-400' : 'bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200'}`}>
             {isOutOfStock ? 'OUT OF STOCK' : (preOrderTag ? "PRE-ORDER" : "BUY NOW")}
           </button>
         </div>
@@ -443,14 +504,14 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
       {/* --- ACCOUNT / DENOMINATION POPUP MODAL --- */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex flex-col justify-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="absolute inset-0" onClick={() => { triggerHaptic(30); setIsModalOpen(false); }}></div>
+          <div className="absolute inset-0" onClick={() => { triggerHaptic(30); setIsModalOpen(false); setPendingAction(null); }}></div>
           <div className="relative bg-white dark:bg-[#121212] w-full max-w-md mx-auto rounded-t-3xl flex flex-col max-h-[85vh] animate-in slide-in-from-bottom-8 duration-300 shadow-[0_-10px_40px_rgba(0,0,0,0.3)] border-t border-gray-100 dark:border-gray-800">
             
             <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-gray-800">
               <h3 className="text-lg font-black text-gray-900 dark:text-white">
                 {isGiftCard ? 'Select Denomination' : 'Select Edition'}
               </h3>
-              <button onClick={() => { triggerHaptic(30); setIsModalOpen(false); }} className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+              <button onClick={() => { triggerHaptic(30); setIsModalOpen(false); setPendingAction(null); }} className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -525,10 +586,20 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
             
             <div className="p-4 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-[#121212] rounded-b-3xl">
                <button 
-                onClick={() => { triggerHaptic([50, 50]); setIsModalOpen(false); }} 
-                className="w-full py-4 rounded-xl bg-black dark:bg-white text-white dark:text-black font-bold active:scale-95 transition-transform text-sm"
+                onClick={() => { 
+                  triggerHaptic([50, 50]); 
+                  setIsModalOpen(false); 
+                  setHasExplicitlySelected(true);
+                  if (pendingAction === 'cart') {
+                      executeAddToCart(false);
+                  } else if (pendingAction === 'buy') {
+                      executeBuyNow();
+                  }
+                  setPendingAction(null);
+                }} 
+                className="w-full py-4 rounded-xl bg-black dark:bg-white text-white dark:text-black font-bold active:scale-95 transition-transform text-sm shadow-lg"
                >
-                 Confirm Selection
+                 {pendingAction ? 'Confirm & Continue' : 'Confirm Selection'}
                </button>
             </div>
 
@@ -543,7 +614,14 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
             <div className="text-sm font-bold text-white tracking-widest px-3 py-1 bg-black/60 backdrop-blur-md rounded-lg pointer-events-auto shadow-sm">
               {activeGalleryIndex + 1} <span className="text-gray-400 mx-1">/</span> {productImages.length}
             </div>
-            <button onClick={() => { triggerHaptic(30); setIsGalleryOpen(false); }} className="p-2 bg-black/60 backdrop-blur-md rounded-full hover:bg-white/20 transition-colors pointer-events-auto shadow-sm">
+            <button 
+              onClick={() => { 
+                triggerHaptic(30); 
+                setIsGalleryOpen(false); 
+                setActiveGalleryIndex(0); 
+              }} 
+              className="p-2 bg-black/60 backdrop-blur-md rounded-full hover:bg-white/20 transition-colors pointer-events-auto shadow-sm"
+            >
               <X className="w-6 h-6 text-white" />
             </button>
           </div>
