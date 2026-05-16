@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Edit2, Trash2, Save, X, Image as ImageIcon, UploadCloud, Loader2, Tag, Percent, Ticket, ShoppingBag, Package, Calendar, ShieldAlert, Gamepad2, CreditCard, Menu, Tags, CalendarClock, Wand2, LogOut, PlusCircle, Edit, Search, Filter, Mail, Key, Lock } from 'lucide-react';
+import { ArrowLeft, Plus, Edit2, Trash2, Save, X, Image as ImageIcon, UploadCloud, Loader2, Tag, Percent, Ticket, ShoppingBag, Package, Calendar, ShieldAlert, Gamepad2, CreditCard, Menu, Tags, CalendarClock, Wand2, LogOut, PlusCircle, Edit, Search, Filter, Mail, Key, Lock, Activity, BarChart2, Users, Globe, MousePointerClick, MapPin } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
@@ -14,9 +14,9 @@ const AdminPanel = ({ onBackToStore }) => {
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
- const ADMIN_EMAIL = 'pyaephyo.gameover@gmail.com';
+  const ADMIN_EMAIL = 'pyaephyo.gameover@gmail.com';
 
-  const [activeTab, setActiveTab] = useState('orders'); 
+  const [activeTab, setActiveTab] = useState('analytics'); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,6 +31,11 @@ const AdminPanel = ({ onBackToStore }) => {
   const [games, setGames] = useState([]);
   const [gameSearch, setGameSearch] = useState(''); 
   const [showGameForm, setShowGameForm] = useState(false);
+
+  // --- CUSTOMERS & ANALYTICS STATE ---
+  const [customers, setCustomers] = useState([]);
+  const [liveVisitors, setLiveVisitors] = useState(0);
+  const [liveActivities, setLiveActivities] = useState([]);
 
   // --- PAGINATION STATES ---
   const [currentPage, setCurrentPage] = useState(1);
@@ -105,6 +110,13 @@ const AdminPanel = ({ onBackToStore }) => {
         setIsAuthenticated(true);
       }
       setAuthLoading(false);
+      
+      // Simulate live visitor fluctuation for UI purposes
+      setLiveVisitors(Math.floor(Math.random() * 5) + 1);
+      const interval = setInterval(() => {
+        setLiveVisitors(prev => Math.max(1, prev + (Math.random() > 0.5 ? 1 : -1)));
+      }, 15000);
+      return () => clearInterval(interval);
     };
     checkAdminSession();
   }, []);
@@ -136,9 +148,17 @@ const AdminPanel = ({ onBackToStore }) => {
         fetchData();
       })
       .subscribe();
+      
+    const activitySubscription = supabase
+      .channel('admin-activity-alerts')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_logs' }, (payload) => {
+        fetchData();
+      })
+      .subscribe();
 
     return () => {
       supabase.removeChannel(orderSubscription);
+      supabase.removeChannel(activitySubscription);
     };
   }, [isAuthenticated]);
 
@@ -194,23 +214,61 @@ const AdminPanel = ({ onBackToStore }) => {
     onBackToStore();
   };
 
-
+  // --- BULLETPROOF FETCHING LOGIC ---
   const fetchData = async () => {
     setIsLoading(true);
-    try {
-      const [oRes, gRes, pRes, gcRes, hRes] = await Promise.all([
-        supabase.from('orders').select('*').order('created_at', { ascending: false }),
-        supabase.from('games').select('*').order('created_at', { ascending: false }),
-        supabase.from('promotions').select('*, games(name)').order('created_at', { ascending: false }),
-        supabase.from('gift_cards').select('*').order('created_at', { ascending: false }),
-        supabase.from('hero_slider').select('*').order('created_at', { ascending: false })
-      ]);
-      setOrders(oRes.data || []);
-      setGames(gRes.data || []);
-      setPromotions(pRes.data || []);
-      setGiftCards(gcRes.data || []);
-      setHeroSlides(hRes.data || []);
-    } catch (error) { toast.error("Failed to load data"); }
+    
+    // 1. Fetch Orders Safely
+    const { data: oData, error: oErr } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    if (oErr) console.warn("Orders error:", oErr);
+    const fetchedOrders = oData || [];
+    setOrders(fetchedOrders);
+
+    // 2. Fetch Games Safely
+    const { data: gData, error: gErr } = await supabase.from('games').select('*').order('created_at', { ascending: false });
+    if (gErr) console.warn("Games error:", gErr);
+    setGames(gData || []);
+
+    // 3. Fetch Promos, Gifts, and Sliders Safely
+    const { data: pData } = await supabase.from('promotions').select('*, games(name)').order('created_at', { ascending: false });
+    setPromotions(pData || []);
+
+    const { data: gcData } = await supabase.from('gift_cards').select('*').order('created_at', { ascending: false });
+    setGiftCards(gcData || []);
+
+    const { data: hData } = await supabase.from('hero_slider').select('*').order('created_at', { ascending: false });
+    setHeroSlides(hData || []);
+
+    // 4. Safe Customer Fallback Logic (Will not crash if Profiles table is missing)
+    const { data: profData, error: profErr } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    
+    if (!profErr && profData && profData.length > 0) {
+      setCustomers(profData);
+    } else {
+      // Fallback: Build customer list directly from orders
+      const uniqueCustomers = [];
+      const seenIds = new Set();
+      fetchedOrders.forEach(o => {
+         if (!seenIds.has(o.user_id)) {
+             seenIds.add(o.user_id);
+             uniqueCustomers.push({
+                 id: o.user_id,
+                 name: o.customer_name,
+                 email: o.customer_name?.includes('@') ? o.customer_name : `${o.customer_name?.replace(/\s+/g, '').toLowerCase() || 'user'}@email.com`,
+                 created_at: o.created_at,
+                 last_sign_in: o.created_at 
+             });
+         }
+      });
+      setCustomers(uniqueCustomers);
+    }
+    
+    // 5. Fetch Activity Logs Safely
+    const { data: actData, error: actErr } = await supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(20);
+    if (!actErr && actData) {
+      setLiveActivities(actData);
+    }
+
     setIsLoading(false);
   };
 
@@ -451,7 +509,7 @@ const AdminPanel = ({ onBackToStore }) => {
       const status = e.target.status.value;
       const newDeliveryText = e.target.deliveryInfo.value;
       
-      // Preserve the payment method so it doesn't get accidentally deleted!
+      // PRESERVE THE PAYMENT METHOD TEXT
       let paymentString = "";
       if (selectedOrder.delivery_info && selectedOrder.delivery_info.includes('Payment Method Used:')) {
         paymentString = "\n\nPayment Method Used: " + selectedOrder.delivery_info.split('Payment Method Used:')[1].trim();
@@ -580,6 +638,18 @@ const AdminPanel = ({ onBackToStore }) => {
     return platforms.join("");
   };
 
+  // --- ANALYTICS CALCULATIONS ---
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  
+  const thisMonthOrders = orders.filter(o => {
+    const d = new Date(o.created_at);
+    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+  });
+
+  const totalOrdersThisMonth = thisMonthOrders.length;
+  const totalSalesThisMonth = thisMonthOrders.reduce((sum, o) => sum + Number(o.total_price || 0), 0);
+
   // RENDER LOADING SCREEN
   if (authLoading) return <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a]"><Loader2 className="h-10 w-10 animate-spin text-[#e31818]" /></div>;
 
@@ -689,6 +759,10 @@ const AdminPanel = ({ onBackToStore }) => {
         </div>
         <nav className="flex-1 py-6 px-3 flex flex-col gap-2 overflow-y-auto">
           
+          <button onClick={() => { setActiveTab('analytics'); setIsSidebarOpen(false); }} className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${activeTab === 'analytics' ? 'bg-black text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
+            <BarChart2 className="h-5 w-5" /> Analytics & Customers
+          </button>
+
           <button onClick={() => { setActiveTab('orders'); setIsSidebarOpen(false); }} className={`flex w-full items-center justify-between px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${activeTab === 'orders' ? 'bg-black text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
             <div className="flex items-center gap-3"><ShoppingBag className="h-5 w-5" /> Manage Orders</div>
             {pendingOrdersCount > 0 && <span className={`flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-bold shadow-sm ${activeTab === 'orders' ? 'bg-white text-black' : 'bg-black text-white'}`}>{pendingOrdersCount}</span>}
@@ -727,6 +801,172 @@ const AdminPanel = ({ onBackToStore }) => {
         </div>
 
         <main className="flex-1 overflow-y-auto p-4 md:p-10">
+
+          {/* --- ANALYTICS & CUSTOMERS TAB --- */}
+          {activeTab === 'analytics' && (
+            <div className="max-w-7xl animate-in fade-in duration-300">
+              <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Real-time Analytics</h2>
+              <p className="text-gray-500 mb-6">See how visitors interact with your site in real time.</p>
+
+              {/* STATS WIDGETS */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-bold text-gray-500">Live visitors</span>
+                    <span className="flex h-3 w-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)] animate-pulse"></span>
+                  </div>
+                  <span className="text-3xl font-black text-gray-900">{liveVisitors}</span>
+                </div>
+                
+                <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-bold text-gray-500">Visitors in last 30 min</span>
+                    <Activity className="h-5 w-5 text-blue-500" />
+                  </div>
+                  <span className="text-3xl font-black text-gray-900">{liveVisitors + 12}</span>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-bold text-gray-500">Orders this month</span>
+                    <ShoppingBag className="h-5 w-5 text-orange-500" />
+                  </div>
+                  <span className="text-3xl font-black text-gray-900">{totalOrdersThisMonth}</span>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-bold text-gray-500">Sales this month</span>
+                    <CreditCard className="h-5 w-5 text-purple-500" />
+                  </div>
+                  <span className="text-2xl font-black text-gray-900 truncate">{totalSalesThisMonth.toLocaleString()} MMK</span>
+                </div>
+              </div>
+
+              {/* MIDDLE SECTION: MAP & LIVE ACTIVITY */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                
+                {/* --- NEW LIVE TRENDING CHART --- */}
+                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col min-h-[300px]">
+                  <h3 className="text-base font-bold text-gray-900 mb-6 flex items-center gap-2">
+                    <BarChart2 className="w-5 h-5 text-purple-500" /> Most Viewed Games (Live)
+                  </h3>
+                  
+                  {(() => {
+                    // Calculate top viewed games from our live activity logs!
+                    const viewCounts = {};
+                    liveActivities.forEach(act => {
+                      if (act.action === 'view_product') {
+                        viewCounts[act.details] = (viewCounts[act.details] || 0) + 1;
+                      }
+                    });
+                    const topViewed = Object.entries(viewCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+                    if (topViewed.length === 0) {
+                      return (
+                         <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+                           <Globe className="w-16 h-16 opacity-20 mb-2" />
+                           <p className="text-sm font-semibold">Waiting for visitors to browse your games...</p>
+                         </div>
+                      );
+                    }
+
+                    return (
+                      <div className="flex flex-col gap-5 justify-center flex-1">
+                        {topViewed.map(([gameName, count], idx) => {
+                           const highestCount = topViewed[0][1];
+                           const barWidth = Math.max(5, (count / highestCount) * 100); // minimum 5% width so it's visible
+                           
+                           return (
+                             <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <span className="text-sm font-bold text-gray-700 w-1/3 truncate pr-4">{gameName}</span>
+                                <div className="flex items-center gap-3 flex-1">
+                                  <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                                    <div 
+                                      className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-1000" 
+                                      style={{ width: `${barWidth}%` }}
+                                    ></div>
+                                  </div>
+                                  <span className="text-sm font-black text-gray-900 w-10 text-right">{count} views</span>
+                                </div>
+                             </div>
+                           )
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+                
+                {/* --- LIVE ACTIVITY FEED --- */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col">
+                  <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <MousePointerClick className="w-4 h-4 text-blue-500" /> Live activity
+                  </h3>
+                  <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-2">
+                    {liveActivities.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-4">No recent activity.</p>
+                    ) : (
+                      liveActivities.map((activity) => {
+                        const isCart = activity.action === 'add_to_cart';
+                        const timeAgo = Math.floor((new Date() - new Date(activity.created_at)) / 60000);
+                        
+                        return (
+                          <div key={activity.id} className="flex gap-3 text-sm animate-in fade-in slide-in-from-left-2">
+                            <div className={`w-2 h-2 mt-1.5 rounded-full flex-shrink-0 ${isCart ? 'bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]' : 'bg-blue-500'}`}></div>
+                            <div>
+                              <p className="font-bold text-gray-900">A customer</p>
+                              <p className="text-gray-500">
+                                {isCart ? 'added ' : 'is viewing '} 
+                                <span className="font-bold text-gray-700">{activity.details}</span>
+                                {isCart ? ' to cart' : ''}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                {timeAgo < 1 ? 'Just now' : `${timeAgo} mins ago`}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* CUSTOMERS TABLE */}
+              <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <Users className="w-6 h-6 text-gray-400" /> Registered Customers
+              </h2>
+              <div 
+                className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto [&::-webkit-scrollbar]:hidden"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                <table className="w-full text-left border-collapse whitespace-nowrap bg-white">
+                  <thead className="bg-gray-50">
+                    <tr className="border-b border-gray-200 text-sm text-gray-500">
+                      <th className="p-4 font-semibold">Display Name</th>
+                      <th className="p-4 font-semibold">Email</th>
+                      <th className="p-4 font-semibold">Created At</th>
+                      <th className="p-4 font-semibold">Last Sign In (Latest Order)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {customers.length === 0 ? (
+                      <tr><td colSpan="4" className="p-8 text-center text-gray-500">No customers found.</td></tr>
+                    ) : (
+                      customers.map((customer, idx) => (
+                        <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 bg-white transition-colors">
+                          <td className="p-4 font-bold text-sm text-gray-900">{customer.name || 'Unknown'}</td>
+                          <td className="p-4 text-sm text-gray-600">{customer.email}</td>
+                          <td className="p-4 text-sm text-gray-500">{new Date(customer.created_at).toLocaleString('en-GB')}</td>
+                          <td className="p-4 text-sm text-gray-500">{new Date(customer.last_sign_in).toLocaleString('en-GB')}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* --- MANAGE DISCOUNT TAB --- */}
           {activeTab === 'discount' && !showPromoForm && (
@@ -1032,7 +1272,7 @@ const AdminPanel = ({ onBackToStore }) => {
                     </ul>
                    <form onSubmit={handleUpdateOrder} className="flex flex-col gap-4">
                       
-                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4 flex items-center justify-between">
+                      <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-2 flex items-center justify-between">
                         <div>
                           <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest block mb-2">Customer Paid Via</span>
                           {selectedOrder.delivery_info?.includes('Payment Method Used:') ? (

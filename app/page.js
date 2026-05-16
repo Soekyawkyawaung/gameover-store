@@ -242,11 +242,16 @@ export default function Home() {
   const allUniqueGenres = [...new Set(games.flatMap(g => g.collections?.filter(c => c !== "PS4 Games" && c !== "PS5 Games") || []))];
   const priceRanges = ['10,000 - 50,000 MMK', '50,000 - 100,000 MMK', '100,000 - 150,000 MMK', 'Over 150,000 MMK'];
 
-  // --- ACTIONS ---
-  const handleGameClick = (item) => {
+ const handleGameClick = (item) => {
     setSelectedGame(item);
     setCurrentView('details');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // --- SEND TRACKING DATA TO ADMIN PANEL ---
+    supabase.from('activity_logs').insert([{ 
+      action: 'view_product', 
+      details: item.name 
+    }]).then();
   };
 
   const handleSearchItemClick = (item) => {

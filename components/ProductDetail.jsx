@@ -125,7 +125,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     } catch (error) { toast.error("An error occurred"); } finally { setIsWishlistLoading(false); }
   };
 
-  // --- SMART CART LOGIC ---
+  // --- SMART CART LOGIC WITH TRACKING ---
   const executeAddToCart = async (isBuyNowAction = false) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -141,11 +141,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     setIsAddingCart(true);
     try {
       if (isBuyNowAction) {
-        const { data: oldCart } = await supabase.from('cart').select('id').eq('user_id', session.user.id);
-        if (oldCart && oldCart.length > 0) {
-          const idsToDelete = oldCart.map(item => item.id);
-          await supabase.from('cart').delete().in('id', idsToDelete);
-        }
+        await supabase.from('cart').delete().eq('user_id', session.user.id);
       }
 
       const cartData = {
@@ -172,6 +168,12 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
         if (error) throw error;
         triggerHaptic([50, 50, 50]);
         if (!isBuyNowAction) toast.success("Added to Cart!");
+        
+        // --- SEND TRACKING DATA TO BACKEND ---
+        supabase.from('activity_logs').insert([{ 
+            action: 'add_to_cart', 
+            details: game.name 
+        }]).then();
       }
       window.dispatchEvent(new Event('cartUpdated'));
       return true;
