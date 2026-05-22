@@ -14,7 +14,6 @@ const AdminPanel = ({ onBackToStore }) => {
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // GAME OVER STORE ADMIN
   const ADMIN_EMAIL = 'pyaephyo.gameover@gmail.com';
 
   const [activeTab, setActiveTab] = useState('analytics'); 
@@ -47,7 +46,7 @@ const AdminPanel = ({ onBackToStore }) => {
   const [giftCards, setGiftCards] = useState([]);
   const [heroSlides, setHeroSlides] = useState([]);
 
-  // --- NEW GAME / EDIT GAME STATES (GAME OVER ACTIVATED/DEACTIVATED LOGIC) ---
+  // --- NEW GAME / EDIT GAME STATES ---
   const initialGameState = {
     name: '', description: '', size: '', youtube_link: '', collections: '', release_date: '',
     price: '', discount_price: '', activated_stock: 0,
@@ -126,8 +125,7 @@ const AdminPanel = ({ onBackToStore }) => {
   useEffect(() => {
     if (!isAuthenticated) return;
     
-    // Initial fetch shows loading spinner
-    fetchData(false);
+    fetchData();
 
     if (typeof window !== 'undefined' && 'Notification' in window) {
       if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
@@ -135,7 +133,6 @@ const AdminPanel = ({ onBackToStore }) => {
       }
     }
 
-    // Silent updates on background changes
     const orderSubscription = supabase
       .channel('admin-order-alerts')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
@@ -148,14 +145,14 @@ const AdminPanel = ({ onBackToStore }) => {
             icon: '/logo.jpg', 
           });
         }
-        fetchData(true);
+        fetchData();
       })
       .subscribe();
       
     const activitySubscription = supabase
       .channel('admin-activity-alerts')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_logs' }, (payload) => {
-        fetchData(true);
+        fetchData();
       })
       .subscribe();
 
@@ -217,57 +214,62 @@ const AdminPanel = ({ onBackToStore }) => {
     onBackToStore();
   };
 
-  // --- BULLETPROOF SILENT FETCHING LOGIC ---
-  const fetchData = async (isSilent = false) => {
-    if (!isSilent) setIsLoading(true);
+  // --- BULLETPROOF FETCHING LOGIC ---
+  const fetchData = async () => {
+    setIsLoading(true);
     
-    try {
-      const [oRes, gRes, pRes, gcRes, hRes, profRes, actRes] = await Promise.all([
-        supabase.from('orders').select('*').order('created_at', { ascending: false }),
-        supabase.from('games').select('*').order('created_at', { ascending: false }),
-        supabase.from('promotions').select('*, games(name)').order('created_at', { ascending: false }),
-        supabase.from('gift_cards').select('*').order('created_at', { ascending: false }),
-        supabase.from('hero_slider').select('*').order('created_at', { ascending: false }),
-        supabase.from('profiles').select('*').order('created_at', { ascending: false }).catch(() => ({data: null})),
-        supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(20)
-      ]);
-      
-      const fetchedOrders = oRes.data || [];
-      setOrders(fetchedOrders);
-      setGames(gRes.data || []);
-      setPromotions(pRes.data || []);
-      setGiftCards(gcRes.data || []);
-      setHeroSlides(hRes.data || []);
+    // 1. Fetch Orders Safely
+    const { data: oData, error: oErr } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
+    if (oErr) console.warn("Orders error:", oErr);
+    const fetchedOrders = oData || [];
+    setOrders(fetchedOrders);
 
-      if (profRes && profRes.data && profRes.data.length > 0) {
-        setCustomers(profRes.data);
-      } else {
-        const uniqueCustomers = [];
-        const seenIds = new Set();
-        fetchedOrders.forEach(o => {
-           if (!seenIds.has(o.user_id)) {
-               seenIds.add(o.user_id);
-               uniqueCustomers.push({
-                   id: o.user_id,
-                   name: o.customer_name,
-                   email: o.customer_name?.includes('@') ? o.customer_name : `${o.customer_name?.replace(/\s+/g, '').toLowerCase() || 'user'}@email.com`,
-                   created_at: o.created_at,
-                   last_sign_in: o.created_at 
-               });
-           }
-        });
-        setCustomers(uniqueCustomers);
-      }
-      
-      if (actRes && actRes.data) {
-        setLiveActivities(actRes.data);
-      }
+    // 2. Fetch Games Safely
+    const { data: gData, error: gErr } = await supabase.from('games').select('*').order('created_at', { ascending: false });
+    if (gErr) console.warn("Games error:", gErr);
+    setGames(gData || []);
 
-    } catch (error) { 
-      if(!isSilent) toast.error("Failed to load data"); 
+    // 3. Fetch Promos, Gifts, and Sliders Safely
+    const { data: pData } = await supabase.from('promotions').select('*, games(name)').order('created_at', { ascending: false });
+    setPromotions(pData || []);
+
+    const { data: gcData } = await supabase.from('gift_cards').select('*').order('created_at', { ascending: false });
+    setGiftCards(gcData || []);
+
+    const { data: hData } = await supabase.from('hero_slider').select('*').order('created_at', { ascending: false });
+    setHeroSlides(hData || []);
+
+    // 4. Safe Customer Fallback Logic (Will not crash if Profiles table is missing)
+    const { data: profData, error: profErr } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+    
+    if (!profErr && profData && profData.length > 0) {
+      setCustomers(profData);
+    } else {
+      // Fallback: Build customer list directly from orders
+      const uniqueCustomers = [];
+      const seenIds = new Set();
+      fetchedOrders.forEach(o => {
+         if (!seenIds.has(o.user_id)) {
+             seenIds.add(o.user_id);
+             uniqueCustomers.push({
+                 id: o.user_id,
+                 name: o.customer_name,
+                 email: o.customer_name?.includes('@') ? o.customer_name : `${o.customer_name?.replace(/\s+/g, '').toLowerCase() || 'user'}@email.com`,
+                 created_at: o.created_at,
+                 last_sign_in: o.created_at 
+             });
+         }
+      });
+      setCustomers(uniqueCustomers);
     }
     
-    if (!isSilent) setIsLoading(false);
+    // 5. Fetch Activity Logs Safely
+    const { data: actData, error: actErr } = await supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(20);
+    if (!actErr && actData) {
+      setLiveActivities(actData);
+    }
+
+    setIsLoading(false);
   };
 
   // --- UPLOAD HELPER ---
@@ -423,7 +425,7 @@ const AdminPanel = ({ onBackToStore }) => {
       }
       
       resetGameForm();
-      fetchData(false);
+      fetchData();
     } catch (error) { 
       toast.error(error.message || "An error occurred while saving the game."); 
     }
@@ -434,7 +436,7 @@ const AdminPanel = ({ onBackToStore }) => {
     if (!window.confirm("Are you sure you want to delete this game?")) return;
     await supabase.from('games').delete().eq('id', id);
     toast.success("Deleted");
-    fetchData(false);
+    fetchData();
   };
 
   // --- PROMOTION MANAGEMENT ---
@@ -482,7 +484,7 @@ const AdminPanel = ({ onBackToStore }) => {
       toast.success(`Discount Promo Scheduled for ${promoGameIds.length} game(s)!`);
       setShowPromoForm(false);
       resetPromoForm();
-      fetchData(false);
+      fetchData();
     } catch (error) { toast.error(error.message); }
     setIsSubmitting(false);
   };
@@ -497,7 +499,7 @@ const AdminPanel = ({ onBackToStore }) => {
     if (!window.confirm("Delete this discount promo? Price will instantly revert to regular on store.")) return;
     await supabase.from('promotions').delete().eq('id', id);
     toast.success("Promo deleted.");
-    fetchData(false);
+    fetchData();
   };
 
   // --- ORDER MANAGEMENT ---
@@ -507,6 +509,7 @@ const AdminPanel = ({ onBackToStore }) => {
       const status = e.target.status.value;
       const newDeliveryText = e.target.deliveryInfo.value;
       
+      // PRESERVE THE PAYMENT METHOD TEXT
       let paymentString = "";
       if (selectedOrder.delivery_info && selectedOrder.delivery_info.includes('Payment Method Used:')) {
         paymentString = "\n\nPayment Method Used: " + selectedOrder.delivery_info.split('Payment Method Used:')[1].trim();
@@ -518,7 +521,7 @@ const AdminPanel = ({ onBackToStore }) => {
       if (error) throw error;
       toast.success("Order Updated!");
       setSelectedOrder(null);
-      fetchData(true); 
+      fetchData(); 
     } catch (error) { toast.error(error.message); }
   };
 
@@ -556,7 +559,7 @@ const AdminPanel = ({ onBackToStore }) => {
         toast.success("Gift Card Added!");
       }
       resetGiftForm();
-      fetchData(false);
+      fetchData();
     } catch (error) { toast.error(error.message); }
     finally { setIsSubmitting(false); }
   };
@@ -575,7 +578,7 @@ const AdminPanel = ({ onBackToStore }) => {
   const handleDeleteGift = async (id) => {
     if (!window.confirm("Delete this gift card?")) return;
     await supabase.from('gift_cards').delete().eq('id', id);
-    fetchData(false);
+    fetchData();
   };
 
   // --- SLIDER MANAGEMENT ---
@@ -601,7 +604,6 @@ const AdminPanel = ({ onBackToStore }) => {
     finally { setIsSubmitting(false); }
   };
 
-  // --- GAME OVER: ACTIVATED / DEACTIVATED RENDERER ---
   const renderPricingBlock = (title, prefix, stateObj, isEditing) => (
     <div className="col-span-1 md:col-span-2 border-t border-gray-200 pt-6 mt-4">
       <h3 className="text-sm font-black text-gray-900 mb-4 uppercase tracking-widest bg-gray-100 py-2 px-3 rounded-lg inline-block">{title}</h3>
@@ -804,7 +806,9 @@ const AdminPanel = ({ onBackToStore }) => {
           {activeTab === 'analytics' && (
             <div className="max-w-7xl animate-in fade-in duration-300">
               <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Real-time Analytics</h2>
+              <p className="text-gray-500 mb-6">See how visitors interact with your site in real time.</p>
 
+              {/* STATS WIDGETS */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex flex-col justify-between">
                   <div className="flex items-center justify-between mb-4">
@@ -842,8 +846,59 @@ const AdminPanel = ({ onBackToStore }) => {
               {/* MIDDLE SECTION: MAP & LIVE ACTIVITY */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                 
-                {/* --- LIVE ACTIVITY FEED (2/3 width) --- */}
+                {/* --- NEW LIVE TRENDING CHART --- */}
                 <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col min-h-[300px]">
+                  <h3 className="text-base font-bold text-gray-900 mb-6 flex items-center gap-2">
+                    <BarChart2 className="w-5 h-5 text-purple-500" /> Most Viewed Games (Live)
+                  </h3>
+                  
+                  {(() => {
+                    // Calculate top viewed games from our live activity logs!
+                    const viewCounts = {};
+                    liveActivities.forEach(act => {
+                      if (act.action === 'view_product') {
+                        viewCounts[act.details] = (viewCounts[act.details] || 0) + 1;
+                      }
+                    });
+                    const topViewed = Object.entries(viewCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+                    if (topViewed.length === 0) {
+                      return (
+                         <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
+                           <Globe className="w-16 h-16 opacity-20 mb-2" />
+                           <p className="text-sm font-semibold">Waiting for visitors to browse your games...</p>
+                         </div>
+                      );
+                    }
+
+                    return (
+                      <div className="flex flex-col gap-5 justify-center flex-1">
+                        {topViewed.map(([gameName, count], idx) => {
+                           const highestCount = topViewed[0][1];
+                           const barWidth = Math.max(5, (count / highestCount) * 100); // minimum 5% width so it's visible
+                           
+                           return (
+                             <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <span className="text-sm font-bold text-gray-700 w-1/3 truncate pr-4">{gameName}</span>
+                                <div className="flex items-center gap-3 flex-1">
+                                  <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                                    <div 
+                                      className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-1000" 
+                                      style={{ width: `${barWidth}%` }}
+                                    ></div>
+                                  </div>
+                                  <span className="text-sm font-black text-gray-900 w-10 text-right">{count} views</span>
+                                </div>
+                             </div>
+                           )
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+                
+                {/* --- LIVE ACTIVITY FEED --- */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col">
                   <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
                     <MousePointerClick className="w-4 h-4 text-blue-500" /> Live activity
                   </h3>
@@ -875,57 +930,6 @@ const AdminPanel = ({ onBackToStore }) => {
                     )}
                   </div>
                 </div>
-
-                {/* --- LIVE TRENDING CHART (1/3 width) --- */}
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col min-h-[300px]">
-                  <h3 className="text-base font-bold text-gray-900 mb-6 flex items-center gap-2">
-                    <BarChart2 className="w-5 h-5 text-purple-500" /> Most Viewed Games
-                  </h3>
-                  
-                  {(() => {
-                    const viewCounts = {};
-                    liveActivities.forEach(act => {
-                      if (act.action === 'view_product') {
-                        viewCounts[act.details] = (viewCounts[act.details] || 0) + 1;
-                      }
-                    });
-                    const topViewed = Object.entries(viewCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-
-                    if (topViewed.length === 0) {
-                      return (
-                         <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-                           <Globe className="w-12 h-12 opacity-20 mb-2" />
-                           <p className="text-xs font-semibold text-center">Waiting for visitors...</p>
-                         </div>
-                      );
-                    }
-
-                    return (
-                      <div className="flex flex-col gap-6 justify-start flex-1 mt-2">
-                        {topViewed.map(([gameName, count], idx) => {
-                           const highestCount = topViewed[0][1];
-                           const barWidth = Math.max(5, (count / highestCount) * 100); 
-                           
-                           return (
-                             <div key={idx} className="flex flex-col gap-1.5">
-                                <div className="flex justify-between items-end">
-                                  <span className="text-xs font-bold text-gray-700 truncate pr-2">{gameName}</span>
-                                  <span className="text-[10px] font-black text-gray-500">{count} views</span>
-                                </div>
-                                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                                  <div 
-                                    className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-1000" 
-                                    style={{ width: `${barWidth}%` }}
-                                  ></div>
-                                </div>
-                             </div>
-                           )
-                        })}
-                      </div>
-                    );
-                  })()}
-                </div>
-                
               </div>
 
               {/* CUSTOMERS TABLE */}
@@ -936,7 +940,7 @@ const AdminPanel = ({ onBackToStore }) => {
                 className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-x-auto [&::-webkit-scrollbar]:hidden"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
-                <table className="w-full text-left border-collapse whitespace-nowrap">
+                <table className="w-full text-left border-collapse whitespace-nowrap bg-white">
                   <thead className="bg-gray-50">
                     <tr className="border-b border-gray-200 text-sm text-gray-500">
                       <th className="p-4 font-semibold">Display Name</th>
@@ -945,12 +949,12 @@ const AdminPanel = ({ onBackToStore }) => {
                       <th className="p-4 font-semibold">Last Sign In (Latest Order)</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="bg-white">
                     {customers.length === 0 ? (
                       <tr><td colSpan="4" className="p-8 text-center text-gray-500">No customers found.</td></tr>
                     ) : (
                       customers.map((customer, idx) => (
-                        <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 bg-white transition-colors">
                           <td className="p-4 font-bold text-sm text-gray-900">{customer.name || 'Unknown'}</td>
                           <td className="p-4 text-sm text-gray-600">{customer.email}</td>
                           <td className="p-4 text-sm text-gray-500">{new Date(customer.created_at).toLocaleString('en-GB')}</td>
@@ -1080,8 +1084,8 @@ const AdminPanel = ({ onBackToStore }) => {
                                   <div className="bg-green-50 p-3 rounded-lg border border-green-100">
                                     <span className="text-[10px] font-black uppercase text-green-700 mb-2 block">PS5 Pricing</span>
                                     <div className="flex flex-col gap-2">
-                                      <input type="number" placeholder={`PS5 Act Promo (Reg: ${game.ps5_price})`} value={promoPrices[id]?.ps5_activated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps5_activated: e.target.value}})} className="w-full rounded-xl text-sm font-bold border border-gray-300 bg-white text-gray-900 px-3 py-2 outline-none focus:border-black" />
-                                      {game.ps5_deactivated_price && <input type="number" placeholder={`PS5 Deact Promo (Reg: ${game.ps5_deactivated_price})`} value={promoPrices[id]?.ps5_deactivated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps5_deactivated: e.target.value}})} className="w-full rounded-xl text-sm font-bold border border-gray-300 bg-white text-gray-900 px-3 py-2 outline-none focus:border-black" />}
+                                      <input type="number" placeholder={`PS5 Act Promo (Reg: ${game.ps5_price})`} value={promoPrices[id]?.ps5_activated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps5_activated: e.target.value}})} className="w-full rounded text-sm font-bold border-gray-300 px-3 py-2 outline-none" />
+                                      {game.ps5_deactivated_price && <input type="number" placeholder={`PS5 Deact Promo (Reg: ${game.ps5_deactivated_price})`} value={promoPrices[id]?.ps5_deactivated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps5_deactivated: e.target.value}})} className="w-full rounded text-sm font-bold border-gray-300 px-3 py-2 outline-none" />}
                                     </div>
                                   </div>
                                 )}
@@ -1090,8 +1094,8 @@ const AdminPanel = ({ onBackToStore }) => {
                                   <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
                                     <span className="text-[10px] font-black uppercase text-blue-700 mb-2 block">PS4 Pricing</span>
                                     <div className="flex flex-col gap-2">
-                                      <input type="number" placeholder={`PS4 Act Promo (Reg: ${game.ps4_price})`} value={promoPrices[id]?.ps4_activated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps4_activated: e.target.value}})} className="w-full rounded-xl text-sm font-bold border border-gray-300 bg-white text-gray-900 px-3 py-2 outline-none focus:border-black" />
-                                      {game.ps4_deactivated_price && <input type="number" placeholder={`PS4 Deact Promo (Reg: ${game.ps4_deactivated_price})`} value={promoPrices[id]?.ps4_deactivated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps4_deactivated: e.target.value}})} className="w-full rounded-xl text-sm font-bold border border-gray-300 bg-white text-gray-900 px-3 py-2 outline-none focus:border-black" />}
+                                      <input type="number" placeholder={`PS4 Act Promo (Reg: ${game.ps4_price})`} value={promoPrices[id]?.ps4_activated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps4_activated: e.target.value}})} className="w-full rounded text-sm font-bold border-gray-300 px-3 py-2 outline-none" />
+                                      {game.ps4_deactivated_price && <input type="number" placeholder={`PS4 Deact Promo (Reg: ${game.ps4_deactivated_price})`} value={promoPrices[id]?.ps4_deactivated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], ps4_deactivated: e.target.value}})} className="w-full rounded text-sm font-bold border-gray-300 px-3 py-2 outline-none" />}
                                     </div>
                                   </div>
                                 )}
@@ -1100,8 +1104,8 @@ const AdminPanel = ({ onBackToStore }) => {
                                   <div className="bg-gray-100 p-3 rounded-lg border border-gray-200 col-span-1 md:col-span-2">
                                     <span className="text-[10px] font-black uppercase text-gray-700 mb-2 block">General Pricing</span>
                                     <div className="flex flex-col sm:flex-row gap-2">
-                                      <input type="number" required placeholder={`Act Promo (Reg: ${game?.price})`} value={promoPrices[id]?.activated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], activated: e.target.value}})} className="flex-1 rounded-xl text-sm font-bold border border-gray-300 bg-white text-gray-900 px-3 py-2 outline-none focus:border-black" />
-                                      {game?.deactivated_price && <input type="number" placeholder={`Deact Promo (Reg: ${game?.deactivated_price})`} value={promoPrices[id]?.deactivated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], deactivated: e.target.value}})} className="flex-1 rounded-xl text-sm font-bold border border-gray-300 bg-white text-gray-900 px-3 py-2 outline-none focus:border-black" />}
+                                      <input type="number" required placeholder={`Act Promo (Reg: ${game?.price})`} value={promoPrices[id]?.activated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], activated: e.target.value}})} className="flex-1 rounded text-sm font-bold border-gray-300 px-3 py-2 outline-none" />
+                                      {game?.deactivated_price && <input type="number" placeholder={`Deact Promo (Reg: ${game?.deactivated_price})`} value={promoPrices[id]?.deactivated || ''} onChange={(e) => setPromoPrices({...promoPrices, [id]: {...promoPrices[id], deactivated: e.target.value}})} className="flex-1 rounded text-sm font-bold border-gray-300 px-3 py-2 outline-none" />}
                                     </div>
                                   </div>
                                 )}
