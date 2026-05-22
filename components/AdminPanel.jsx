@@ -842,18 +842,50 @@ const AdminPanel = ({ onBackToStore }) => {
                   <span className="text-2xl font-black text-gray-900 truncate">{totalSalesThisMonth.toLocaleString()} MMK</span>
                 </div>
               </div>
-
-              {/* MIDDLE SECTION: MAP & LIVE ACTIVITY */}
+{/* MIDDLE SECTION: MAP & LIVE ACTIVITY */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                 
-                {/* --- NEW LIVE TRENDING CHART --- */}
-                <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col min-h-[300px]">
-                  <h3 className="text-base font-bold text-gray-900 mb-6 flex items-center gap-2">
-                    <BarChart2 className="w-5 h-5 text-purple-500" /> Most Viewed Games (Live)
+                {/* --- LIVE ACTIVITY FEED (Now 2/3 width) --- */}
+                <div className="lg:col-span-2 bg-white dark:bg-[#121212] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm p-6 flex flex-col min-h-[300px] transition-colors">
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <MousePointerClick className="w-4 h-4 text-blue-500" /> Live activity
+                  </h3>
+                  <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-2">
+                    {liveActivities.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No recent activity.</p>
+                    ) : (
+                      liveActivities.map((activity) => {
+                        const isCart = activity.action === 'add_to_cart';
+                        const timeAgo = Math.floor((new Date() - new Date(activity.created_at)) / 60000);
+                        
+                        return (
+                          <div key={activity.id} className="flex gap-3 text-sm animate-in fade-in slide-in-from-left-2">
+                            <div className={`w-2 h-2 mt-1.5 rounded-full flex-shrink-0 ${isCart ? 'bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]' : 'bg-blue-500'}`}></div>
+                            <div>
+                              <p className="font-bold text-gray-900 dark:text-white">A customer</p>
+                              <p className="text-gray-600 dark:text-gray-400">
+                                {isCart ? 'added ' : 'is viewing '} 
+                                <span className="font-bold text-gray-800 dark:text-gray-300">{activity.details}</span>
+                                {isCart ? ' to cart' : ''}
+                              </p>
+                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                                {timeAgo < 1 ? 'Just now' : `${timeAgo} mins ago`}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* --- NEW LIVE TRENDING CHART (Now 1/3 width) --- */}
+                <div className="bg-white dark:bg-[#121212] rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm p-6 flex flex-col min-h-[300px] transition-colors">
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                    <BarChart2 className="w-5 h-5 text-purple-500" /> Most Viewed Games
                   </h3>
                   
                   {(() => {
-                    // Calculate top viewed games from our live activity logs!
                     const viewCounts = {};
                     liveActivities.forEach(act => {
                       if (act.action === 'view_product') {
@@ -864,30 +896,30 @@ const AdminPanel = ({ onBackToStore }) => {
 
                     if (topViewed.length === 0) {
                       return (
-                         <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-                           <Globe className="w-16 h-16 opacity-20 mb-2" />
-                           <p className="text-sm font-semibold">Waiting for visitors to browse your games...</p>
+                         <div className="flex-1 flex flex-col items-center justify-center text-gray-400 dark:text-gray-600">
+                           <Globe className="w-12 h-12 opacity-20 mb-2" />
+                           <p className="text-xs font-semibold text-center">Waiting for visitors...</p>
                          </div>
                       );
                     }
 
                     return (
-                      <div className="flex flex-col gap-5 justify-center flex-1">
+                      <div className="flex flex-col gap-6 justify-start flex-1 mt-2">
                         {topViewed.map(([gameName, count], idx) => {
                            const highestCount = topViewed[0][1];
-                           const barWidth = Math.max(5, (count / highestCount) * 100); // minimum 5% width so it's visible
+                           const barWidth = Math.max(5, (count / highestCount) * 100); 
                            
                            return (
-                             <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                <span className="text-sm font-bold text-gray-700 w-1/3 truncate pr-4">{gameName}</span>
-                                <div className="flex items-center gap-3 flex-1">
-                                  <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
-                                    <div 
-                                      className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-1000" 
-                                      style={{ width: `${barWidth}%` }}
-                                    ></div>
-                                  </div>
-                                  <span className="text-sm font-black text-gray-900 w-10 text-right">{count} views</span>
+                             <div key={idx} className="flex flex-col gap-1.5">
+                                <div className="flex justify-between items-end">
+                                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300 truncate pr-2">{gameName}</span>
+                                  <span className="text-[10px] font-black text-gray-500 dark:text-gray-400">{count} views</span>
+                                </div>
+                                <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-1000" 
+                                    style={{ width: `${barWidth}%` }}
+                                  ></div>
                                 </div>
                              </div>
                            )
@@ -897,39 +929,6 @@ const AdminPanel = ({ onBackToStore }) => {
                   })()}
                 </div>
                 
-                {/* --- LIVE ACTIVITY FEED --- */}
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col">
-                  <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <MousePointerClick className="w-4 h-4 text-blue-500" /> Live activity
-                  </h3>
-                  <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-2">
-                    {liveActivities.length === 0 ? (
-                      <p className="text-sm text-gray-500 text-center py-4">No recent activity.</p>
-                    ) : (
-                      liveActivities.map((activity) => {
-                        const isCart = activity.action === 'add_to_cart';
-                        const timeAgo = Math.floor((new Date() - new Date(activity.created_at)) / 60000);
-                        
-                        return (
-                          <div key={activity.id} className="flex gap-3 text-sm animate-in fade-in slide-in-from-left-2">
-                            <div className={`w-2 h-2 mt-1.5 rounded-full flex-shrink-0 ${isCart ? 'bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]' : 'bg-blue-500'}`}></div>
-                            <div>
-                              <p className="font-bold text-gray-900">A customer</p>
-                              <p className="text-gray-500">
-                                {isCart ? 'added ' : 'is viewing '} 
-                                <span className="font-bold text-gray-700">{activity.details}</span>
-                                {isCart ? ' to cart' : ''}
-                              </p>
-                              <p className="text-xs text-gray-400 mt-0.5">
-                                {timeAgo < 1 ? 'Just now' : `${timeAgo} mins ago`}
-                              </p>
-                            </div>
-                          </div>
-                        )
-                      })
-                    )}
-                  </div>
-                </div>
               </div>
 
               {/* CUSTOMERS TABLE */}
