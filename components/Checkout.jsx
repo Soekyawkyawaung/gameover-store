@@ -5,7 +5,7 @@ import { UploadCloud, Loader2, CheckCircle, Receipt, Check, FileText, X } from '
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
-const Checkout = ({ promotedGamesIds = {}, onGoToOrders }) => {
+const Checkout = ({ isBuyNow, promotedGamesIds = {}, onGoToOrders }) => {
   const [cartItems, setCartItems] = useState([]);
   const [totalPrice, setTotalPrice] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -17,13 +17,16 @@ const Checkout = ({ promotedGamesIds = {}, onGoToOrders }) => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [generatedOrderNo, setGeneratedOrderNo] = useState('');
   
+  // --- TERMS AND CONDITIONS MODAL STATE ---
   const [showTermsModal, setShowTermsModal] = useState(false);
 
-  useEffect(() => {
-    fetchCartData();
-  }, []);
+  const triggerHaptic = (pattern = 50) => {
+    if (typeof window !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate(pattern); } catch (e) {}
+    }
+  };
 
-  // --- NEW SMART PRICE LOGIC ---
+  // --- SMART PRICE LOGIC (GAME OVER) ---
   const getDerivedPrice = (item) => {
     const isGift = !!item.gift_cards;
     const targetItem = isGift ? item.gift_cards : item.games;
@@ -73,23 +76,40 @@ const Checkout = ({ promotedGamesIds = {}, onGoToOrders }) => {
     return { price: regularPrice, isPromo: false };
   };
 
+  useEffect(() => {
+    fetchCartData();
+  }, [isBuyNow]);
+
   const fetchCartData = async () => {
     setIsLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
+      
+      if (isBuyNow) {
+        const buyNowItem = JSON.parse(localStorage.getItem('gameover_buynow') || '[]');
+        if (buyNowItem.length > 0) {
+          setCartItems(buyNowItem);
+          const total = buyNowItem.reduce((sum, item) => {
+            const dp = getDerivedPrice(item);
+            return sum + (Number(dp.price) * (item.quantity || 1));
+          }, 0);
+          setTotalPrice(total);
+        }
+        setIsLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('cart')
-        .select('id, account_type, selected_option, quantity, games(*), gift_cards(*)')
+        .select('id, selected_option, account_type, quantity, games(*), gift_cards(*)')
         .eq('user_id', session.user.id);
         
       if (!error && data) {
         setCartItems(data);
-        
         const total = data.reduce((sum, item) => {
           const dp = getDerivedPrice(item);
           return sum + (Number(dp.price) * (item.quantity || 1));
         }, 0);
-        
         setTotalPrice(total);
       }
     }
@@ -98,26 +118,33 @@ const Checkout = ({ promotedGamesIds = {}, onGoToOrders }) => {
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
+      triggerHaptic(30); 
       setScreenshotFile(e.target.files[0]);
       setScreenshotPreview(URL.createObjectURL(e.target.files[0]));
     }
   };
 
+  // --- INTERCEPT CHECKOUT TO SHOW TERMS ---
   const handleConfirmClick = () => {
     if (!screenshotFile) {
+      triggerHaptic(200);
       toast.error("Please upload your payment screenshot first!");
       return;
     }
 
+    // Check if the cart contains any games (not just gift cards)
     const hasGame = cartItems.some(item => !item.gift_cards && item.games);
     
     if (hasGame) {
+      triggerHaptic(50);
       setShowTermsModal(true); 
     } else {
+      triggerHaptic(50);
       processOrder(); 
     }
   };
 
+  // --- FINAL ORDER PROCESSING ---
   const processOrder = async () => {
     setIsSubmitting(true);
     setShowTermsModal(false);
@@ -145,8 +172,8 @@ const Checkout = ({ promotedGamesIds = {}, onGoToOrders }) => {
           return { 
             id: targetItem.id,
             name: targetItem.name, 
-            account_type: isGift ? item.selected_option.label : item.account_type,
-            price: dp.price, 
+            account_type: isGift ? item.selected_option.label : (item.account_type || 'Game'),
+            price: dp.price,
             quantity: item.quantity || 1,
             cover_image: targetItem.cover_image || targetItem.image 
           };
@@ -156,32 +183,44 @@ const Checkout = ({ promotedGamesIds = {}, onGoToOrders }) => {
       }]);
       if (dbError) throw dbError;
 
-      await supabase.from('cart').delete().eq('user_id', session.user.id);
-      window.dispatchEvent(new Event('cartUpdated'));
+      if (isBuyNow) {
+        localStorage.removeItem('gameover_buynow');
+      } else {
+        await supabase.from('cart').delete().eq('user_id', session.user.id);
+        window.dispatchEvent(new Event('cartUpdated'));
+      }
 
+      triggerHaptic([100, 50, 100, 50, 100]); 
       setIsSuccess(true);
     } catch (error) {
+      triggerHaptic(200); 
       toast.error(error.message || "Failed to submit payment.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const hasPreOrder = cartItems.some(item => 
-    item.games?.collections && item.games.collections.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'))
-  );
+  const hasPreOrder = cartItems.some(item => {
+    const hasTag = item.games?.collections && item.games.collections.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'));
+    if (!hasTag) return false;
+    
+    if (item.games?.release_date) {
+      const daysToRelease = Math.ceil((new Date(item.games.release_date) - new Date()) / (1000 * 60 * 60 * 24));
+      return daysToRelease > 0;
+    }
+    return true;
+  });
 
   if (isSuccess) {
     return (
-      <div className="flex min-h-[70vh] flex-col items-center justify-center px-6 text-center animate-in zoom-in duration-500">
+      <div className="flex min-h-[70vh] flex-col items-center justify-center px-6 text-center animate-in zoom-in duration-500 bg-white dark:bg-[#121212] transition-colors">
         <div className="rounded-full bg-green-100 dark:bg-green-900/30 p-4 mb-6"><CheckCircle className="h-16 w-16 text-green-600 dark:text-green-500" /></div>
         <h2 className="text-2xl font-black text-gray-900 dark:text-white">Order Placed!</h2>
-        <p className="mt-2 text-lg font-bold text-black dark:text-gray-300">Order No: {generatedOrderNo}</p>
+        <p className="mt-2 text-lg font-bold text-blue-600 dark:text-blue-400">Order No: {generatedOrderNo}</p>
         <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
           We are checking your payment. You can track your status in the "My Orders" menu.
         </p>
         
-        {/* --- NEW BUTTON: BACK TO ORDERS --- */}
         <button 
           onClick={() => {
             if (onGoToOrders) onGoToOrders();
@@ -191,15 +230,14 @@ const Checkout = ({ promotedGamesIds = {}, onGoToOrders }) => {
         >
           View My Orders
         </button>
-
       </div>
     );
   }
 
-  if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-black dark:text-white" /></div>;
+  if (isLoading) return <div className="flex justify-center py-20 bg-white dark:bg-[#121212]"><Loader2 className="h-8 w-8 animate-spin text-black dark:text-white" /></div>;
 
   return (
-    <div className="flex flex-col px-4 pb-20 pt-2 animate-in fade-in duration-300">
+    <div className="flex flex-col px-4 pb-20 pt-2 animate-in fade-in duration-300 bg-white dark:bg-[#121212] min-h-screen transition-colors">
       
       {/* Order Summary */}
       <div className="rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#121212] p-5 shadow-sm">
@@ -221,10 +259,10 @@ const Checkout = ({ promotedGamesIds = {}, onGoToOrders }) => {
             return (
               <div key={item.id} className="flex justify-between items-center bg-gray-50 dark:bg-[#0a0a0a] p-3 rounded-lg border border-gray-100 dark:border-gray-800 gap-2">
                 <div className="flex flex-col truncate flex-1 pr-1">
-                  <span className="text-sm font-bold text-gray-900 dark:text-white truncate leading-tight">{itemQty}x {targetItem?.name}</span>
-                  <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-1">
-                    {isGift ? item.selected_option?.label : item.account_type}
+                  <span className="text-sm font-bold text-gray-900 dark:text-white truncate leading-tight">
+                    {itemQty}x {targetItem?.name} {item.account_type && item.account_type !== 'Game' && !isGift ? `(${item.account_type})` : ''}
                   </span>
+                  {isGift && <span className="text-[10px] font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mt-1">{item.selected_option?.label}</span>}
                 </div>
                 <span className={`text-sm font-black whitespace-nowrap ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>
                   {totalItemPrice.toLocaleString()} MMK
@@ -235,7 +273,7 @@ const Checkout = ({ promotedGamesIds = {}, onGoToOrders }) => {
         </div>
         <div className="mt-4 flex justify-between border-t border-dashed border-gray-200 dark:border-gray-800 pt-4">
           <span className="font-bold text-gray-900 dark:text-white">Total</span>
-          <span className="text-lg font-black text-black dark:text-white">{totalPrice.toLocaleString()} MMK</span>
+          <span className="text-lg font-black text-red-600 dark:text-red-500">{totalPrice.toLocaleString()} MMK</span>
         </div>
       </div>
 
@@ -271,6 +309,7 @@ const Checkout = ({ promotedGamesIds = {}, onGoToOrders }) => {
       </div>
 
       <div className="mt-6 overflow-hidden rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#121212]">
+        
         <div className="p-8 flex flex-col items-center border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-[#0a0a0a]/50">
           {paymentMethod === 'kbzpay' && (
             <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
@@ -294,12 +333,12 @@ const Checkout = ({ promotedGamesIds = {}, onGoToOrders }) => {
         </div>
 
         <div className="p-6 text-center bg-white dark:bg-[#121212]">
-          <p className="mb-4 text-sm font-semibold text-gray-500 dark:text-gray-400 leading-relaxed px-2">
+          <p className="mb-4 text-sm font-semibold text-gray-500 dark:text-gray-400 leading-relaxed px-4">
             After transferring the exact amount via <span className="font-bold text-black dark:text-white">{paymentMethod === 'kbzpay' ? 'KBZPay' : 'Wave Pay'}</span>, please upload a screenshot of your successful transaction.
           </p>
           <label className="relative flex w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-[#0a0a0a] px-4 py-8 hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors">
             {screenshotPreview ? (
-              <img src={screenshotPreview} alt="Receipt Preview" className="h-32 object-contain shadow-sm rounded-lg" />
+              <img src={screenshotPreview} alt="Receipt" className="h-32 object-contain shadow-sm rounded-md" />
             ) : (
               <div className="flex flex-col items-center">
                 <UploadCloud className="mb-2 h-8 w-8 text-gray-400 dark:text-gray-500" />
@@ -311,7 +350,7 @@ const Checkout = ({ promotedGamesIds = {}, onGoToOrders }) => {
         </div>
       </div>
 
-      <button onClick={handleConfirmClick} disabled={isSubmitting || cartItems.length === 0} className="mt-6 w-full rounded-xl bg-black dark:bg-white py-4 font-bold text-white dark:text-black shadow-lg shadow-gray-500/30 dark:shadow-none hover:bg-gray-800 dark:hover:bg-gray-200 active:scale-95 transition-all disabled:opacity-50 flex justify-center items-center gap-2">
+      <button onClick={handleConfirmClick} disabled={isSubmitting || cartItems.length === 0} className="mt-6 w-full rounded-xl bg-black dark:bg-white py-4 font-bold text-white dark:text-black shadow-lg active:scale-95 transition-all disabled:opacity-50 flex justify-center items-center gap-2">
         {isSubmitting && <Loader2 className="h-5 w-5 animate-spin" />}
         {isSubmitting ? 'Processing Payment...' : (hasPreOrder ? 'Proceed to Pre-Order' : 'Confirm Payment')}
       </button>

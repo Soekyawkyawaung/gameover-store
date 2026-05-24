@@ -78,12 +78,10 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedGame, setSelectedGame] = useState(null);
 
-  // --- NEW SEARCH STATES ---
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState([]);
 
-  // --- IN-STOCK CAROUSEL STATE ---
   const [carouselIndex, setCarouselIndex] = useState(0);
 
   const [seeAllTitle, setSeeAllTitle] = useState('');
@@ -163,8 +161,6 @@ export default function Home() {
     };
     
     fetchStoreData();
-
-    // LOAD RECENT SEARCHES
     const savedSearches = JSON.parse(localStorage.getItem('gameover_searches') || '[]');
     setRecentSearches(savedSearches);
   }, []);
@@ -178,11 +174,9 @@ export default function Home() {
     
     const promo = promotedGamesIds[game.id];
 
-    // Look for general price, fallback to 0 if null/empty
     let basePrice = game.discount_price || game.price || 0;
     let regPrice = game.discount_price ? game.price : null;
 
-    // If general price is 0, check PS5, then PS4
     if (basePrice === 0) {
       if (game.ps5_price > 0) {
         basePrice = game.ps5_discount_price || game.ps5_price;
@@ -194,7 +188,6 @@ export default function Home() {
     }
 
     if (promo) {
-        // Find which promo price to show. Prioritize activated versions.
         let activePromoPrice = promo.activated || promo.ps5_promo_price || promo.ps4_promo_price || basePrice;
         let activeDeactPrice = promo.deactivated || promo.ps5_deact_promo_price || promo.ps4_deact_promo_price || game.deactivated_discount || game.deactivated_price;
         
@@ -216,18 +209,46 @@ export default function Home() {
     };
   };
 
-  const isPreOrder = (game) => game.collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'));
+  // --- SMART PRE-ORDER LOGIC ---
+  const isActivePreOrder = (game) => {
+    const hasTag = game.collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'));
+    if (!hasTag) return false;
+    
+    if (game.release_date) {
+      const daysToRelease = Math.ceil((new Date(game.release_date) - new Date()) / (1000 * 60 * 60 * 24));
+      // Only an active pre-order if it releases TOMORROW or LATER.
+      return daysToRelease > 0;
+    }
+    return true; // Tagged pre-order but no date specified
+  };
 
-  const newGames = games.filter(game => game.collections?.some(c => c.toLowerCase().includes('new games')) && !isPreOrder(game));
-  const ps5GamesCategory = games.filter(game => game.collections?.some(c => c.toLowerCase().includes('ps5 games')) && !isPreOrder(game));
-  const preOrderGames = games.filter(game => isPreOrder(game));
-  const ps4GamesCategory = games.filter(game => game.collections?.some(c => c.toLowerCase().includes('ps4 games')) && !isPreOrder(game));
+  const isReleasedPreOrder = (game) => {
+    const hasTag = game.collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'));
+    if (!hasTag) return false;
+    
+    if (game.release_date) {
+      const daysToRelease = Math.ceil((new Date(game.release_date) - new Date()) / (1000 * 60 * 60 * 24));
+      // TRUE if the release date is TODAY or IN THE PAST
+      return daysToRelease <= 0;
+    }
+    return false;
+  };
+
+  const newGames = games.filter(game => {
+    const hasNewTag = game.collections?.some(c => c.toLowerCase().includes('new games'));
+    // Game is a "New Game" if it manually has the tag, OR if it's a pre-order that has now launched!
+    return (hasNewTag && !isActivePreOrder(game)) || isReleasedPreOrder(game);
+  });
+
+  const ps5GamesCategory = games.filter(game => game.collections?.some(c => c.toLowerCase().includes('ps5 games')) && !isActivePreOrder(game));
+  const preOrderGames = games.filter(game => isActivePreOrder(game));
+  const ps4GamesCategory = games.filter(game => game.collections?.some(c => c.toLowerCase().includes('ps4 games')) && !isActivePreOrder(game));
 
   const searchResults = games.filter(game => game.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // --- IN-STOCK PS4 & PS5 GAMES (ALL) ---
+  // --- IN-STOCK PS4 & PS5 GAMES ---
   const allInStockConsoleGames = games.filter(game => {
-    if (isPreOrder(game)) return false;
+    if (isActivePreOrder(game)) return false; // Prevent active pre-orders from showing up here
     const isConsole = game.collections?.some(c => c.toLowerCase().includes('ps4 games') || c.toLowerCase().includes('ps5 games'));
     const hasStock = 
       (game.ps5_stock > 0) || (game.ps5_deactivated_stock > 0) ||
@@ -236,9 +257,7 @@ export default function Home() {
     return isConsole && hasStock;
   });
 
-  // --- IN-STOCK CAROUSEL (TOP 10 ONLY) ---
   const carouselInStockGames = allInStockConsoleGames.slice(0, 10);
-
   const allUniqueGenres = [...new Set(games.flatMap(g => g.collections?.filter(c => c !== "PS4 Games" && c !== "PS5 Games") || []))];
   const priceRanges = ['10,000 - 50,000 MMK', '50,000 - 100,000 MMK', '100,000 - 150,000 MMK', 'Over 150,000 MMK'];
 
@@ -246,12 +265,7 @@ export default function Home() {
     setSelectedGame(item);
     setCurrentView('details');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-
-    // --- SEND TRACKING DATA TO ADMIN PANEL ---
-    supabase.from('activity_logs').insert([{ 
-      action: 'view_product', 
-      details: item.name 
-    }]).then();
+    supabase.from('activity_logs').insert([{ action: 'view_product', details: item.name }]).then();
   };
 
   const handleSearchItemClick = (item) => {
@@ -304,9 +318,10 @@ export default function Home() {
     if (collections.includes("PS4 Games")) platforms.push("PS4");
     if (collections.includes("PS5 Games")) platforms.push("PS5");
     
-    const preOrder = isPreOrder({ collections }); 
+    const hasTag = collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder')); 
     let preOrderTag = null;
-    if (preOrder) {
+    
+    if (hasTag) {
       if (releaseDate) {
         const daysToRelease = Math.ceil((new Date(releaseDate) - new Date()) / (1000 * 60 * 60 * 24));
         if (daysToRelease > 0) preOrderTag = `In ${daysToRelease} Days`;
@@ -377,7 +392,6 @@ export default function Home() {
 
   const activeFilterCount = (selectedPrices.length > 0 ? 1 : 0) + selectedGenres.length + selectedPlatforms.length;
 
-  // --- HAPTIC FEEDBACK HELPER ---
   const triggerHaptic = (pattern = 50) => {
     if (typeof window !== 'undefined' && navigator.vibrate) {
       try { navigator.vibrate(pattern); } catch (e) {}
@@ -409,12 +423,19 @@ export default function Home() {
           {currentView === 'checkout' && (
             <div className="animate-in slide-in-from-right duration-300 bg-white dark:bg-[#121212] min-h-screen pt-4">
               <button 
-                onClick={() => setCurrentView(checkoutOrigin === 'details' ? 'details' : 'cart')} 
+                onClick={() => { 
+                  setCurrentView(checkoutOrigin === 'details' ? 'details' : 'cart'); 
+                  if (checkoutOrigin === 'details') localStorage.removeItem('gameover_buynow'); 
+                }} 
                 className="mx-4 mb-2 text-sm font-bold text-blue-600 dark:text-blue-400 hover:underline active:scale-95 transition-transform"
               >
                 ← {checkoutOrigin === 'details' ? 'Back' : 'Back to Cart'}
               </button>
-              <Checkout promotedGamesIds={promotedGamesIds} onGoToOrders={() => setCurrentView('orders')} />
+              <Checkout 
+                isBuyNow={checkoutOrigin === 'details'} 
+                promotedGamesIds={promotedGamesIds} 
+                onGoToOrders={() => setCurrentView('orders')} 
+              />
             </div>
           )}
           
@@ -555,7 +576,7 @@ export default function Home() {
                                   <div>
                                     <h3 className="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">{game.name}</h3>
                                     <div className="flex items-center gap-2 mt-1">
-                                      <p className={`text-sm font-extrabold ${dp.isPromo ? 'text-[#e31818]' : 'text-black dark:text-white'}`}>
+                                      <p className={`text-sm font-extrabold ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>
                                         {dp.price.toLocaleString()} MMK
                                       </p>
                                       {dp.regularPrice && dp.price < dp.regularPrice && (
@@ -615,10 +636,10 @@ export default function Home() {
                                   <div className="flex items-center gap-2">
                                     <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{game.name}</h4>
                                     {dp.regularPrice && dp.price < dp.regularPrice && (
-                                      <span className="text-[8px] font-black text-white bg-[#e31818] px-1.5 py-0.5 rounded shadow-sm">SALE</span>
+                                      <span className="text-[8px] font-black text-white bg-red-600 px-1.5 py-0.5 rounded shadow-sm">SALE</span>
                                     )}
                                   </div>
-                                  <p className={`text-xs font-black mt-1 ${dp.isPromo ? 'text-[#e31818]' : 'text-gray-500 dark:text-gray-400'}`}>
+                                  <p className={`text-xs font-black mt-1 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
                                     {dp.price.toLocaleString()} MMK
                                   </p>
                                 </div>
@@ -664,7 +685,7 @@ export default function Home() {
                                 </div>
                                 <div>
                                   <h3 className="text-xs font-bold text-gray-900 dark:text-white truncate">{game.name}</h3>
-                                  <p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-[#e31818]' : 'text-black dark:text-white'}`}>
+                                  <p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>
                                     {dp.price.toLocaleString()} MMK
                                   </p>
                                   {dp.regularPrice && dp.price < dp.regularPrice && (

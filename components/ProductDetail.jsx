@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, ShoppingCart, Heart, ChevronDown, ChevronUp, PlayCircle, Image as ImageIcon, X, Tag, Share2, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Heart, ChevronDown, ChevronUp, PlayCircle, Image as ImageIcon, X, Tag, Share2, ChevronRight, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 
@@ -24,19 +24,16 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
   
-  // --- MODAL & SMART SELECTION STATE ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [hasExplicitlySelected, setHasExplicitlySelected] = useState(false);
-  const [pendingAction, setPendingAction] = useState(null); // 'cart' | 'buy' | null
+  const [pendingAction, setPendingAction] = useState(null); 
 
-  // --- HAPTIC FEEDBACK HELPER ---
   const triggerHaptic = (pattern = 50) => {
     if (typeof window !== 'undefined' && navigator.vibrate) {
       try { navigator.vibrate(pattern); } catch (e) {}
     }
   };
 
-  // --- DYNAMIC ACCOUNT TYPES LOGIC ---
   const availableAccounts = React.useMemo(() => {
     if (isGiftCard) return [];
     const accounts = [];
@@ -125,25 +122,12 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     } catch (error) { toast.error("An error occurred"); } finally { setIsWishlistLoading(false); }
   };
 
-  // --- SMART CART LOGIC WITH TRACKING ---
-  const executeAddToCart = async (isBuyNowAction = false) => {
+  const executeAddToCart = async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      toast.error("Please sign in first");
-      return false;
-    }
-
-    if (isOutOfStock) {
-      toast.error("Sorry, this item is out of stock!");
-      return false;
-    }
+    if (!session) return toast.error("Please sign in first");
 
     setIsAddingCart(true);
     try {
-      if (isBuyNowAction) {
-        await supabase.from('cart').delete().eq('user_id', session.user.id);
-      }
-
       const cartData = {
         user_id: session.user.id,
         game_id: !isGiftCard ? game.id : null,
@@ -159,7 +143,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
       
       const { data: existingCart } = await existingQuery.maybeSingle();
       
-      if (existingCart && !isBuyNowAction) {
+      if (existingCart) {
         await supabase.from('cart').update({ quantity: existingCart.quantity + (isGiftCard ? quantity : 1) }).eq('id', existingCart.id);
         triggerHaptic([50, 50, 50]);
         toast.success("Cart updated!");
@@ -167,41 +151,44 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
         const { error } = await supabase.from('cart').insert([cartData]);
         if (error) throw error;
         triggerHaptic([50, 50, 50]);
-        if (!isBuyNowAction) toast.success("Added to Cart!");
-        
-        // --- SEND TRACKING DATA TO BACKEND ---
-        supabase.from('activity_logs').insert([{ 
-            action: 'add_to_cart', 
-            details: game.name 
-        }]).then();
+        toast.success("Added to Cart!");
       }
       window.dispatchEvent(new Event('cartUpdated'));
-      return true;
     } catch (error) { 
       toast.error("Failed to process request"); 
-      return false;
     } finally { 
       setIsAddingCart(false); 
     }
   };
 
   const executeBuyNow = async () => {
-    if (isOutOfStock) return toast.error("Sorry, this item is out of stock!");
-    const success = await executeAddToCart(true); 
-    if (success) {
-      triggerHaptic([50, 50, 50]);
-      onBuyNow();
-    }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return toast.error("Please sign in first");
+
+    const buyNowData = [{
+      id: 'buynow_temp',
+      quantity: isGiftCard ? quantity : 1,
+      selected_option: isGiftCard ? selectedOption : null,
+      account_type: !isGiftCard ? accountType : null,
+      games: !isGiftCard ? game : null,
+      gift_cards: isGiftCard ? game : null,
+    }];
+
+    localStorage.setItem('gameover_buynow', JSON.stringify(buyNowData));
+    triggerHaptic([50, 50, 50]);
+    onBuyNow();
   };
 
-  // --- BUTTON CLICK HANDLERS ---
+  const activeAccountData = availableAccounts.find(acc => acc.id === accountType);
+  const isOutOfStock = !isGiftCard && activeAccountData && activeAccountData.stock <= 0;
+
   const onCartButtonClick = () => {
     if (isOutOfStock) return toast.error("Sorry, this item is out of stock!");
     if (!hasExplicitlySelected) {
         setPendingAction('cart');
         setIsModalOpen(true);
     } else {
-        executeAddToCart(false);
+        executeAddToCart();
     }
   };
 
@@ -244,11 +231,22 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
   };
 
   const youtubeId = getYouTubeId(game.youtube_link);
-  const isPreOrder = game.collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'));
   const recommendedGames = allGames.filter(g => g.id !== game.id && !g.options).slice(0, 6);
 
+  // --- SMART PRE-ORDER LOGIC ---
+  const isActivePreOrder = React.useMemo(() => {
+    const hasTag = game.collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'));
+    if (!hasTag) return false;
+    if (game.release_date) {
+      const daysToRelease = Math.ceil((new Date(game.release_date) - new Date()) / (1000 * 60 * 60 * 24));
+      return daysToRelease > 0;
+    }
+    return true;
+  }, [game]);
+
   let preOrderTag = null;
-  if (isPreOrder) {
+  const hasPreOrderTag = game.collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'));
+  if (hasPreOrderTag) {
     if (game.release_date) {
       const daysToRelease = Math.ceil((new Date(game.release_date) - new Date()) / (1000 * 60 * 60 * 24));
       if (daysToRelease > 0) preOrderTag = "PRE-ORDER";
@@ -259,7 +257,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     }
   }
 
-  // --- REUSABLE PLATFORM TAG RENDERER ---
   const renderPlatformTags = (collections, releaseDate = null) => {
     if (!collections) return null;
     let platforms = [];
@@ -296,7 +293,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
     );
   };
 
-  const activeAccountData = availableAccounts.find(acc => acc.id === accountType);
   const finalPrice = isGiftCard 
     ? (selectedOption ? Number(selectedOption.price) : 0) 
     : (activeAccountData ? (activeAccountData.promo || activeAccountData.price) : 0);
@@ -304,7 +300,6 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
   const originalPriceForDisplay = isGiftCard ? null : (activeAccountData?.promo ? activeAccountData.price : activeAccountData?.original);
   const isPromoActive = !isGiftCard && !!activeAccountData?.promo;
   const totalPrice = finalPrice * (isGiftCard ? quantity : 1);
-  const isOutOfStock = !isGiftCard && activeAccountData && activeAccountData.stock <= 0;
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-[#121212] pb-32 animate-in fade-in duration-300 transition-colors relative">
@@ -498,7 +493,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
             <ShoppingCart className="h-5 w-5" />
           </button>
           <button onClick={onBuyNowButtonClick} disabled={(isGiftCard && !selectedOption) || isOutOfStock} className={`flex-1 items-center justify-center rounded-xl text-white dark:text-black font-black py-3.5 shadow-lg active:scale-95 transition-transform disabled:opacity-50 ${isOutOfStock ? 'bg-gray-300 dark:bg-gray-700 shadow-none cursor-not-allowed text-gray-500 dark:text-gray-400' : 'bg-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200'}`}>
-            {isOutOfStock ? 'OUT OF STOCK' : (preOrderTag ? "PRE-ORDER" : "BUY NOW")}
+            {isOutOfStock ? 'OUT OF STOCK' : (isActivePreOrder ? "PRE-ORDER" : "BUY NOW")}
           </button>
         </div>
       </div>
@@ -593,7 +588,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
                   setIsModalOpen(false); 
                   setHasExplicitlySelected(true);
                   if (pendingAction === 'cart') {
-                      executeAddToCart(false);
+                      executeAddToCart();
                   } else if (pendingAction === 'buy') {
                       executeBuyNow();
                   }
@@ -601,7 +596,7 @@ const ProductDetail = ({ game, prefilledOption = null, allGames, onBack, onBuyNo
                 }} 
                 className="w-full py-4 rounded-xl bg-black dark:bg-white text-white dark:text-black font-bold active:scale-95 transition-transform text-sm shadow-lg"
                >
-                 {pendingAction ? 'Confirm & Continue' : 'Confirm Selection'}
+                 Confirm & Continue
                </button>
             </div>
 
