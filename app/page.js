@@ -16,6 +16,29 @@ import Wishlist from '../components/Wishlist';
 import MyOrders from '../components/MyOrders'; 
 import LiveChat from '../components/LiveChat'; 
 
+// --- ADSTERRA SCRIPT 3 (THE VISUAL BANNER) ---
+const AdsterraBanner = () => {
+  const bannerRef = useRef(null);
+
+  useEffect(() => {
+    if (!bannerRef.current || bannerRef.current.hasChildNodes()) return;
+
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.async = true;
+    script.dataset.cfasync = "false";
+    script.src = "https://pl30616126.effectivecpmnetwork.com/32d5df1025b68960aac127f82cf248a4/invoke.js";
+
+    bannerRef.current.append(script);
+  }, []);
+
+  return (
+    <div className="w-full flex justify-center items-center my-4 overflow-hidden z-0">
+      <div id="container-32d5df1025b68960aac127f82cf248a4" ref={bannerRef} className="max-w-full overflow-hidden flex justify-center rounded-xl"></div>
+    </div>
+  );
+};
+
 const CountdownTimer = ({ endTime, textColor = 'text-white' }) => {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, ended: false });
 
@@ -246,7 +269,7 @@ export default function Home() {
 
   const searchResults = games.filter(game => game.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // --- IN-STOCK PS4 & PS5 GAMES ---
+  // --- IN-STOCK PS4 & PS5 GAMES (ALL) ---
   const allInStockConsoleGames = games.filter(game => {
     if (isActivePreOrder(game)) return false; // Prevent active pre-orders from showing up here
     const isConsole = game.collections?.some(c => c.toLowerCase().includes('ps4 games') || c.toLowerCase().includes('ps5 games'));
@@ -257,7 +280,9 @@ export default function Home() {
     return isConsole && hasStock;
   });
 
+  // --- IN-STOCK CAROUSEL (TOP 10 ONLY) ---
   const carouselInStockGames = allInStockConsoleGames.slice(0, 10);
+
   const allUniqueGenres = [...new Set(games.flatMap(g => g.collections?.filter(c => c !== "PS4 Games" && c !== "PS5 Games") || []))];
   const priceRanges = ['10,000 - 50,000 MMK', '50,000 - 100,000 MMK', '100,000 - 150,000 MMK', 'Over 150,000 MMK'];
 
@@ -265,7 +290,12 @@ export default function Home() {
     setSelectedGame(item);
     setCurrentView('details');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    supabase.from('activity_logs').insert([{ action: 'view_product', details: item.name }]).then();
+
+    // --- SEND TRACKING DATA TO ADMIN PANEL ---
+    supabase.from('activity_logs').insert([{ 
+      action: 'view_product', 
+      details: item.name 
+    }]).then();
   };
 
   const handleSearchItemClick = (item) => {
@@ -318,10 +348,9 @@ export default function Home() {
     if (collections.includes("PS4 Games")) platforms.push("PS4");
     if (collections.includes("PS5 Games")) platforms.push("PS5");
     
-    const hasTag = collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder')); 
+    const preOrder = isPreOrder({ collections }); 
     let preOrderTag = null;
-    
-    if (hasTag) {
+    if (preOrder) {
       if (releaseDate) {
         const daysToRelease = Math.ceil((new Date(releaseDate) - new Date()) / (1000 * 60 * 60 * 24));
         if (daysToRelease > 0) preOrderTag = `In ${daysToRelease} Days`;
@@ -420,6 +449,7 @@ export default function Home() {
           
           {currentView === 'orders' && <MyOrders onBack={() => { triggerHaptic(30); setCurrentView('store'); }} />}
           
+          {/* SMART CHECKOUT ROUTING */}
           {currentView === 'checkout' && (
             <div className="animate-in slide-in-from-right duration-300 bg-white dark:bg-[#121212] min-h-screen pt-4">
               <button 
@@ -427,9 +457,9 @@ export default function Home() {
                   setCurrentView(checkoutOrigin === 'details' ? 'details' : 'cart'); 
                   if (checkoutOrigin === 'details') localStorage.removeItem('gameover_buynow'); 
                 }} 
-                className="mx-4 mb-2 text-sm font-bold text-blue-600 dark:text-blue-400 hover:underline active:scale-95 transition-transform"
+                className="mx-4 mb-2 text-sm font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 active:scale-95 transition-transform"
               >
-                ← {checkoutOrigin === 'details' ? 'Back' : 'Back to Cart'}
+                <ArrowLeft className="w-4 h-4" /> {checkoutOrigin === 'details' ? 'Back' : 'Back to Cart'}
               </button>
               <Checkout 
                 isBuyNow={checkoutOrigin === 'details'} 
@@ -576,7 +606,7 @@ export default function Home() {
                                   <div>
                                     <h3 className="text-sm font-bold text-gray-900 dark:text-white leading-tight truncate">{game.name}</h3>
                                     <div className="flex items-center gap-2 mt-1">
-                                      <p className={`text-sm font-extrabold ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>
+                                      <p className={`text-sm font-extrabold ${dp.isPromo ? 'text-[#e31818]' : 'text-black dark:text-white'}`}>
                                         {dp.price.toLocaleString()} MMK
                                       </p>
                                       {dp.regularPrice && dp.price < dp.regularPrice && (
@@ -636,10 +666,10 @@ export default function Home() {
                                   <div className="flex items-center gap-2">
                                     <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{game.name}</h4>
                                     {dp.regularPrice && dp.price < dp.regularPrice && (
-                                      <span className="text-[8px] font-black text-white bg-red-600 px-1.5 py-0.5 rounded shadow-sm">SALE</span>
+                                      <span className="text-[8px] font-black text-white bg-[#e31818] px-1.5 py-0.5 rounded shadow-sm">SALE</span>
                                     )}
                                   </div>
-                                  <p className={`text-xs font-black mt-1 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
+                                  <p className={`text-xs font-black mt-1 ${dp.isPromo ? 'text-[#e31818]' : 'text-gray-500 dark:text-gray-400'}`}>
                                     {dp.price.toLocaleString()} MMK
                                   </p>
                                 </div>
@@ -655,6 +685,7 @@ export default function Home() {
 
               <>
                 <HeroSlider />
+                <AdsterraBanner />
 
                 {isLoading ? (
                   <div className="p-8 text-center text-sm font-bold text-gray-500">Loading your store...</div>
@@ -685,7 +716,7 @@ export default function Home() {
                                 </div>
                                 <div>
                                   <h3 className="text-xs font-bold text-gray-900 dark:text-white truncate">{game.name}</h3>
-                                  <p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>
+                                  <p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-[#e31818]' : 'text-black dark:text-white'}`}>
                                     {dp.price.toLocaleString()} MMK
                                   </p>
                                   {dp.regularPrice && dp.price < dp.regularPrice && (
@@ -749,7 +780,7 @@ export default function Home() {
                                     <div className={`text-center transition-all duration-500 ${isActive ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4 pointer-events-none'}`}>
                                       <h3 className="text-base font-black text-gray-900 dark:text-white truncate px-2 w-[240px]">{game.name}</h3>
                                       <div className="flex items-center justify-center gap-2 mt-1">
-                                        <p className={`text-sm font-black ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>
+                                        <p className={`text-sm font-black ${dp.isPromo ? 'text-[#e31818]' : 'text-black dark:text-white'}`}>
                                           {dp.price.toLocaleString()} MMK
                                         </p>
                                         {dp.regularPrice && dp.price < dp.regularPrice && (
@@ -802,7 +833,7 @@ export default function Home() {
                                 </div>
                                 <div>
                                   <h3 className="text-xs font-bold text-gray-900 dark:text-white truncate">{game.name}</h3>
-                                  <p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>
+                                  <p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-[#e31818]' : 'text-black dark:text-white'}`}>
                                     {dp.price.toLocaleString()} MMK
                                   </p>
                                   {dp.regularPrice && dp.price < dp.regularPrice && (
@@ -823,7 +854,7 @@ export default function Home() {
                     {activePromotions.length > 0 && (
                       <div className="mt-8 mb-8 animate-in fade-in duration-500 bg-red-50 dark:bg-red-900/10 py-6 border-y border-red-100 dark:border-red-900/20">
                         <div className="px-4 mb-4">
-                          <h2 className="text-lg font-black text-red-600 dark:text-red-500 flex items-center gap-2 tracking-tighter italic">
+                          <h2 className="text-lg font-black text-[#e31818] flex items-center gap-2 tracking-tighter italic">
                             <Tag className="w-5 h-5" /> SPECIAL OFFERS
                           </h2>
                         </div>
@@ -840,7 +871,7 @@ export default function Home() {
                                   <img src={promoGroup.promo_image_url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 p-5 flex flex-col justify-between pointer-events-none">
                                     <div className="flex justify-between items-start">
-                                      <Tag className="w-6 h-6 text-white bg-red-600 p-1 rounded-full shadow-md" />
+                                      <Tag className="w-6 h-6 text-white bg-[#e31818] p-1 rounded-full shadow-md" />
                                       {promoGroup.promo_type === 'photo_countdown' && (
                                         <div className="bg-gray-900/80 backdrop-blur-md p-3 rounded-2xl border border-gray-700/50 flex items-center gap-3">
                                           <Timer className="w-6 h-6 text-red-500"/>
@@ -897,7 +928,7 @@ export default function Home() {
                                 </div>
                                 <div>
                                   <h3 className="text-xs font-bold text-gray-900 dark:text-white truncate">{game.name}</h3>
-                                  <p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>
+                                  <p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-[#e31818]' : 'text-black dark:text-white'}`}>
                                     {dp.price.toLocaleString()} MMK
                                   </p>
                                   {dp.regularPrice && dp.price < dp.regularPrice && (
@@ -937,7 +968,7 @@ export default function Home() {
                                 </div>
                                 <div className="ml-3 flex-1 flex flex-col justify-center truncate pr-2">
                                   <h3 className="text-sm font-bold text-gray-900 dark:text-white leading-snug mb-1 truncate whitespace-normal line-clamp-2">{card.name}</h3>
-                                  <p className={`text-sm font-black mt-1 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>
+                                  <p className={`text-sm font-black mt-1 ${dp.isPromo ? 'text-[#e31818]' : 'text-black dark:text-white'}`}>
                                     From {dp.price.toLocaleString()} MMK
                                   </p>
                                 </div>
@@ -978,7 +1009,7 @@ export default function Home() {
                                 </div>
                                 <div>
                                   <h3 className="text-xs font-bold text-gray-900 dark:text-white truncate">{game.name}</h3>
-                                  <p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-red-600 dark:text-red-500' : 'text-black dark:text-white'}`}>
+                                  <p className={`text-xs font-black mt-0.5 ${dp.isPromo ? 'text-[#e31818]' : 'text-black dark:text-white'}`}>
                                     {dp.price.toLocaleString()} MMK
                                   </p>
                                   {dp.regularPrice && dp.price < dp.regularPrice && (
