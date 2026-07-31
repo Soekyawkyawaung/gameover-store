@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { Search, Filter, X, ArrowLeft, Check, Gamepad2, CreditCard, ChevronRight, Timer, Tag, Trash2, Sparkles, LayoutGrid, Swords, Ghost, Users, Shield, Car, Crosshair } from 'lucide-react'; 
 import { supabase } from '../lib/supabase';
@@ -15,29 +15,7 @@ import Cart from '../components/Cart';
 import Wishlist from '../components/Wishlist'; 
 import MyOrders from '../components/MyOrders'; 
 import LiveChat from '../components/LiveChat'; 
-
-// --- ADSTERRA SCRIPT 3 (THE VISUAL BANNER) ---
-const AdsterraBanner = () => {
-  const bannerRef = useRef(null);
-
-  useEffect(() => {
-    if (!bannerRef.current || bannerRef.current.hasChildNodes()) return;
-
-    const script = document.createElement('script');
-    script.type = 'text/javascript';
-    script.async = true;
-    script.dataset.cfasync = "false";
-    script.src = "https://pl30616126.effectivecpmnetwork.com/32d5df1025b68960aac127f82cf248a4/invoke.js";
-
-    bannerRef.current.append(script);
-  }, []);
-
-  return (
-    <div className="w-full flex justify-center items-center my-4 overflow-hidden z-0">
-      <div id="container-32d5df1025b68960aac127f82cf248a4" ref={bannerRef} className="max-w-full overflow-hidden flex justify-center rounded-xl"></div>
-    </div>
-  );
-};
+import AdBanner from '../components/AdBanner';
 
 const CountdownTimer = ({ endTime, textColor = 'text-white' }) => {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, ended: false });
@@ -239,10 +217,9 @@ export default function Home() {
     
     if (game.release_date) {
       const daysToRelease = Math.ceil((new Date(game.release_date) - new Date()) / (1000 * 60 * 60 * 24));
-      // Only an active pre-order if it releases TOMORROW or LATER.
       return daysToRelease > 0;
     }
-    return true; // Tagged pre-order but no date specified
+    return true; 
   };
 
   const isReleasedPreOrder = (game) => {
@@ -251,7 +228,6 @@ export default function Home() {
     
     if (game.release_date) {
       const daysToRelease = Math.ceil((new Date(game.release_date) - new Date()) / (1000 * 60 * 60 * 24));
-      // TRUE if the release date is TODAY or IN THE PAST
       return daysToRelease <= 0;
     }
     return false;
@@ -259,7 +235,6 @@ export default function Home() {
 
   const newGames = games.filter(game => {
     const hasNewTag = game.collections?.some(c => c.toLowerCase().includes('new games'));
-    // Game is a "New Game" if it manually has the tag, OR if it's a pre-order that has now launched!
     return (hasNewTag && !isActivePreOrder(game)) || isReleasedPreOrder(game);
   });
 
@@ -269,9 +244,9 @@ export default function Home() {
 
   const searchResults = games.filter(game => game.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // --- IN-STOCK PS4 & PS5 GAMES (ALL) ---
+  // --- IN-STOCK PS4 & PS5 GAMES ---
   const allInStockConsoleGames = games.filter(game => {
-    if (isActivePreOrder(game)) return false; // Prevent active pre-orders from showing up here
+    if (isActivePreOrder(game)) return false; 
     const isConsole = game.collections?.some(c => c.toLowerCase().includes('ps4 games') || c.toLowerCase().includes('ps5 games'));
     const hasStock = 
       (game.ps5_stock > 0) || (game.ps5_deactivated_stock > 0) ||
@@ -280,9 +255,7 @@ export default function Home() {
     return isConsole && hasStock;
   });
 
-  // --- IN-STOCK CAROUSEL (TOP 10 ONLY) ---
   const carouselInStockGames = allInStockConsoleGames.slice(0, 10);
-
   const allUniqueGenres = [...new Set(games.flatMap(g => g.collections?.filter(c => c !== "PS4 Games" && c !== "PS5 Games") || []))];
   const priceRanges = ['10,000 - 50,000 MMK', '50,000 - 100,000 MMK', '100,000 - 150,000 MMK', 'Over 150,000 MMK'];
 
@@ -291,7 +264,6 @@ export default function Home() {
     setCurrentView('details');
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    // --- SEND TRACKING DATA TO ADMIN PANEL ---
     supabase.from('activity_logs').insert([{ 
       action: 'view_product', 
       details: item.name 
@@ -348,9 +320,11 @@ export default function Home() {
     if (collections.includes("PS4 Games")) platforms.push("PS4");
     if (collections.includes("PS5 Games")) platforms.push("PS5");
     
-    const preOrder = isPreOrder({ collections }); 
+    // Completely fixed the "isPreOrder" error. Now correctly checks manually:
+    const hasTag = collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder')); 
     let preOrderTag = null;
-    if (preOrder) {
+    
+    if (hasTag) {
       if (releaseDate) {
         const daysToRelease = Math.ceil((new Date(releaseDate) - new Date()) / (1000 * 60 * 60 * 24));
         if (daysToRelease > 0) preOrderTag = `In ${daysToRelease} Days`;
@@ -449,7 +423,6 @@ export default function Home() {
           
           {currentView === 'orders' && <MyOrders onBack={() => { triggerHaptic(30); setCurrentView('store'); }} />}
           
-          {/* SMART CHECKOUT ROUTING */}
           {currentView === 'checkout' && (
             <div className="animate-in slide-in-from-right duration-300 bg-white dark:bg-[#121212] min-h-screen pt-4">
               <button 
@@ -685,7 +658,9 @@ export default function Home() {
 
               <>
                 <HeroSlider />
-                <AdsterraBanner />
+                
+                {/* SAFE ADSTERRA BANNER (NO CRASHES) */}
+                <AdBanner />
 
                 {isLoading ? (
                   <div className="p-8 text-center text-sm font-bold text-gray-500">Loading your store...</div>
