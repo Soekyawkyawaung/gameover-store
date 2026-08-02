@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
-import { Search, Filter, X, ArrowLeft, Check, Gamepad2, CreditCard, ChevronRight, Timer, Tag, Trash2, Sparkles, LayoutGrid, Swords, Ghost, Users, Shield, Car, Crosshair } from 'lucide-react'; 
+import { Search, Filter, X, ArrowLeft, Check, Gamepad2, CreditCard, ChevronRight, Timer, Tag, Trash2, Sparkles, LayoutGrid, Swords, Ghost, Users, Shield, Car, Crosshair, ShieldCheck } from 'lucide-react'; 
 import { supabase } from '../lib/supabase';
 import Header from '../components/Header';
 import HeroSlider from '../components/HeroSlider';
@@ -91,7 +91,23 @@ export default function Home() {
   const [selectedGenres, setSelectedGenres] = useState([]);
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
 
+  // --- SECURITY NOTICE STATE ---
+  const [showMalwareNotice, setShowMalwareNotice] = useState(false);
+
   useEffect(() => {
+    // Check for the 5-day security notice
+    const checkSecurityNotice = () => {
+      const expiryDate = new Date('2026-08-07T23:59:59').getTime();
+      const now = new Date().getTime();
+      const hasSeenNotice = localStorage.getItem('gameover_secure_notice');
+
+      if (now < expiryDate && !hasSeenNotice) {
+        setShowMalwareNotice(true);
+      }
+    };
+    
+    checkSecurityNotice();
+
     const fetchStoreData = async () => {
       setIsLoading(true);
       const now = new Date().toISOString();
@@ -311,6 +327,12 @@ export default function Home() {
     setCarouselIndex(Math.min(Math.max(newIndex, 0), carouselInStockGames.length - 1));
   };
 
+  const closeMalwareNotice = () => {
+    triggerHaptic(30);
+    localStorage.setItem('gameover_secure_notice', 'true');
+    setShowMalwareNotice(false);
+  };
+
   const renderPlatformTags = (collections, releaseDate = null) => {
     if (!collections) return null;
     let platforms = [];
@@ -403,6 +425,31 @@ export default function Home() {
     <div className="min-h-screen w-full bg-gray-50 dark:bg-[#0a0a0a] transition-colors duration-300">
       <div className="relative mx-auto min-h-screen max-w-md bg-white dark:bg-[#121212] shadow-2xl pb-20 overflow-x-hidden transition-colors duration-300">
         <Toaster position="top-center" />
+
+        {/* --- SECURITY NOTICE POP-UP --- */}
+        {showMalwareNotice && (
+          <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
+            <div className="relative bg-white dark:bg-[#121212] rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 border-2 border-green-500">
+              <div className="bg-green-500 p-6 flex justify-center items-center relative">
+                <div className="bg-white/20 p-4 rounded-full">
+                  <ShieldCheck className="w-14 h-14 text-white" />
+                </div>
+              </div>
+              <div className="p-6 text-center">
+                <h3 className="text-xl font-black text-gray-900 dark:text-white mb-3">100% Safe & Secure</h3>
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-300 leading-relaxed mb-2">
+                  Advertisement malware များကိုရှင်းထုတ်ပီးပီဖြစ်သောကြောင့် ချစ်လှစွာသော customer များ ယုံကြည်စိတ်ချစွာဝယ်လို့ရပါပြီ။
+                </p>
+                <button 
+                  onClick={closeMalwareNotice}
+                  className="mt-6 w-full py-4 rounded-xl bg-green-500 text-white font-bold text-base shadow-lg shadow-green-500/30 hover:bg-green-600 active:scale-95 transition-all"
+                >
+                  ဆက်လက်ကြည့်ရှုမည်
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         
         {currentView !== 'details' && currentView !== 'cart' && currentView !== 'wishlist' && currentView !== 'orders' && currentView !== 'seeAll' && currentView !== 'checkout' && 
           <Header onSignInClick={() => setShowAuth(true)} onProfileClick={() => setCurrentView('profile')} onAdminClick={() => setCurrentView('admin')} onCartClick={() => checkAuthAndNavigate('cart')} onWishlistClick={() => checkAuthAndNavigate('wishlist')} onOrdersClick={() => checkAuthAndNavigate('orders')}/>
