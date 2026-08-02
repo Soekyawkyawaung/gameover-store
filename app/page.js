@@ -209,7 +209,6 @@ export default function Home() {
     };
   };
 
-  // --- SMART PRE-ORDER LOGIC ---
   const isActivePreOrder = (game) => {
     const hasTag = game.collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder'));
     if (!hasTag) return false;
@@ -243,7 +242,6 @@ export default function Home() {
 
   const searchResults = games.filter(game => game.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // --- IN-STOCK PS4 & PS5 GAMES ---
   const allInStockConsoleGames = games.filter(game => {
     if (isActivePreOrder(game)) return false; 
     const isConsole = game.collections?.some(c => c.toLowerCase().includes('ps4 games') || c.toLowerCase().includes('ps5 games'));
