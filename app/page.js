@@ -15,7 +15,6 @@ import Cart from '../components/Cart';
 import Wishlist from '../components/Wishlist'; 
 import MyOrders from '../components/MyOrders'; 
 import LiveChat from '../components/LiveChat'; 
-import AdBanner from '../components/AdBanner';
 
 const CountdownTimer = ({ endTime, textColor = 'text-white' }) => {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, ended: false });
@@ -320,7 +319,6 @@ export default function Home() {
     if (collections.includes("PS4 Games")) platforms.push("PS4");
     if (collections.includes("PS5 Games")) platforms.push("PS5");
     
-    // Completely fixed the "isPreOrder" error. Now correctly checks manually:
     const hasTag = collections?.some(c => c.toLowerCase().includes('pre-order') || c.toLowerCase().includes('preorder')); 
     let preOrderTag = null;
     
@@ -658,9 +656,6 @@ export default function Home() {
 
               <>
                 <HeroSlider />
-                
-                {/* SAFE ADSTERRA BANNER (NO CRASHES) */}
-                <AdBanner />
 
                 {isLoading ? (
                   <div className="p-8 text-center text-sm font-bold text-gray-500">Loading your store...</div>
